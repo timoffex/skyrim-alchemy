@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: fd2ac28f870c91dfc4f57bb2c57142c6585dfb784aedaa1826595f5895627682
+-- hash: 5a49c157ef15e260b27f05fdd67770c9dd228306681944f23193d40b64d4c080
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -15,6 +15,7 @@ build-type:     Simple
 library
   exposed-modules:
       Alchemy
+      AlchemyData
   other-modules:
       Paths_skyrim_alchemy
   hs-source-dirs:
