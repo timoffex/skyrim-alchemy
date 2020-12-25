@@ -1,0 +1,18 @@
+cradle:
+  multi:
+    - path: "./app"
+      config:
+        cradle:
+          stack:
+            component: "skyrim-alchemy:exe:skyrim-alchemy-exe"
+        dependencies:
+          - ./src
+    - path: "./src"
+      config:
+        cradle:
+          stack:
+            component: "skyrim-alchemy:lib"
+
+dependencies:
+  - package.yaml
+  - stack.yaml
