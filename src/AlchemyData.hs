@@ -11,10 +11,14 @@ module AlchemyData
   -- * Construction
   , emptyAlchemyData
   , learnIngredientEffect
+  , learnOverlap
 
   -- * Queries
+  , allKnownIngredients
+  , allKnownEffects
   , effectsOf, effectsOfIngredientIn
   , nonEffectsOf, nonEffectsOfIngredientIn
+  , ingredientsNotOverlappingWith
   ) where
 
 
@@ -24,19 +28,22 @@ import           Control.Lens
     , asIndex
     , filtered
     , makeFields
-    , to
     , toListOf
     , view
+    , (&)
     , (^.)
     )
 import           Control.Monad
-    ( forM_, when )
+    ( forM_, unless, when )
 import           Control.Monad.Trans.State
     ( execState, modify )
 import           Data.Coerce
     ( coerce )
 import qualified Data.Map.Strict           as M
+import           Data.Maybe
+    ( isNothing )
 import qualified Data.Set                  as S
+import qualified PairMap                   as PM
 
 
 newtype IngredientName
@@ -69,15 +76,25 @@ data AlchemyData
       :: M.Map IngredientName (S.Set EffectName)
 
     , _alchemyDataFullOverlap
-      :: M.Map IngredientName (M.Map IngredientName (S.Set EffectName)) }
+      :: PM.PairMap IngredientName (S.Set EffectName) }
 $( makeFields ''AlchemyData )
 
 
 -- | An initial 'AlchemyData' that contains no information about
 -- effects or ingredients.
 emptyAlchemyData :: AlchemyData
-emptyAlchemyData = AlchemyData M.empty M.empty M.empty M.empty
+emptyAlchemyData = AlchemyData M.empty M.empty M.empty PM.empty
 
+
+-- | Gets the set of all known ingredients.
+allKnownIngredients :: AlchemyData -> S.Set IngredientName
+allKnownIngredients alchemyData =
+  S.fromList $ M.keys $ alchemyData^.allIngredients
+
+-- | Gets the set of all known effects.
+allKnownEffects :: AlchemyData -> S.Set EffectName
+allKnownEffects alchemyData =
+  S.fromList $ M.keys $ alchemyData^.positives
 
 
 -- | Gets the known effects of the ingredient.
@@ -100,6 +117,20 @@ nonEffectsOfIngredientIn :: AlchemyData -> IngredientName -> S.Set EffectName
 nonEffectsOfIngredientIn = flip nonEffectsOf
 
 
+-- | Gets all ingredients known to not overlap with the given
+-- ingredient.
+ingredientsNotOverlappingWith
+  :: IngredientName
+  -> AlchemyData
+  -> S.Set IngredientName
+ingredientsNotOverlappingWith ingName alchemyData =
+  PM.lookup ingName (alchemyData^.fullOverlap) &
+  M.filter S.null &
+  M.keys &
+  S.fromList
+
+
+
 -- | Associates the effect to the ingredient.
 learnIngredientEffect
   :: IngredientName
@@ -120,7 +151,7 @@ learnIngredientEffect ingName effName alchemyData =
 
       -- Every ingredient whose overlap with this one does not contain
       -- this effect is now known to not contain the effect.
-      forM_ (alchemyData^.fullOverlap.ix ingName.to M.assocs) $
+      forM_ (M.assocs $ PM.lookup ingName (alchemyData^.fullOverlap)) $
         \(otherIng, effs) ->
           when (S.notMember effName effs) $
             modify $ multiMapInsert effName otherIng
@@ -130,12 +161,114 @@ learnIngredientEffect ingName effName alchemyData =
     -- the property that if an effect is contained in two ingredients
     -- that have overlap information, then the effect is contained in
     -- the overlap.
-    fullOverlap' = M.adjust fixOverlap ingName (alchemyData^.fullOverlap)
+    fullOverlap' = PM.adjust fixOverlap ingName (alchemyData^.fullOverlap)
     fixOverlap = M.mapWithKey $ \otherIng ->
       if S.member otherIng (alchemyData^.positives.ix effName)
       then S.insert effName
       else id
 
+
+newtype InconsistentOverlap = InconsistentOverlapReason String
+instance Show InconsistentOverlap where
+  show = coerce
+
+
+learnOverlap
+  :: IngredientName
+  -> IngredientName
+  -> S.Set EffectName
+  -> AlchemyData
+  -> Either InconsistentOverlap AlchemyData
+learnOverlap ing1 ing2 effs alchemyData =
+  do
+    checkConsistent
+    return $ AlchemyData p' n' all' fullOverlap'
+  where
+    -- Avoid contradicting pre-existing information.
+    --
+    -- The overlap is "consistent" if and only if it includes all
+    -- effects common to both ingredients and does not include any
+    -- effects that either of the ingredients is known to not have,
+    -- and the overlap between the ingredients is not already known.
+    --
+    -- If the overlap is consistent, then the updates are simple: add
+    -- both ingredients to the positives map of each effect, add each
+    -- ingredient to the negatives map of each effect on the other
+    -- ingredient that isn't in the overlap, and insert the new
+    -- overlap. Learn the ingredients if they're not already known.
+    --
+    -- If the overlap is inconsistent, then some of these are true:
+    --
+    -- - It doesn't have an effect that's common to both ingredients.
+    -- - It has an effect that's known to not exist on some ingredient.
+    -- - The overlap is already known and it's different.
+    --
+    -- The easiest thing to do is to just reject it. I could output a
+    -- reason too.
+
+    overlapDoesNotAlreadyExist =
+      isNothing $ PM.lookupPair ing1 ing2 $ alchemyData^.fullOverlap
+
+    commonEffects = S.intersection
+      (alchemyData^.allIngredients.ix ing1)
+      (alchemyData^.allIngredients.ix ing2)
+
+    isImpossible eff =
+      let impossibleIngs = alchemyData^.negatives.ix eff
+      in S.member ing1 impossibleIngs || S.member ing2 impossibleIngs
+
+    throwInconsistent = Left . InconsistentOverlapReason
+
+    overlapIncludesCommonEffects = commonEffects `S.isSubsetOf` effs
+    checkOverlapExcludesImpossibleEffects =
+      forM_ effs $ \eff ->
+        when (isImpossible eff) $
+          throwInconsistent $
+            "Overlap includes effect " ++
+            show eff ++
+            " that's known to not exist on one of the ingredients."
+
+    checkConsistent = do
+      unless overlapDoesNotAlreadyExist $
+        throwInconsistent "Overlap already known"
+      unless overlapIncludesCommonEffects $
+        throwInconsistent $
+          "Overlap doesn't include effects common to both ingredients: " ++
+          show (S.toList commonEffects)
+      checkOverlapExcludesImpossibleEffects
+
+
+    ----------------------------------------------------------------------------
+    -- The following assumes that the given overlap is "consistent"
+    ----------------------------------------------------------------------------
+
+    -- For every effect, add both ingredients to its positive map
+    p' = (`execState` (alchemyData^.positives)) $
+      forM_ effs $ \eff ->
+        modify $
+            multiMapInsert eff ing1
+          . multiMapInsert eff ing2
+
+    -- For every effect that is on one ingredient but not in the
+    -- overlap, add the other ingredient to its negative map
+    n' = (`execState` (alchemyData^.negatives)) $ do
+      forM_ (alchemyData^.allIngredients.ix ing1) $ \eff1 ->
+        when (S.notMember eff1 effs) $
+          modify $ multiMapInsert eff1 ing2
+
+      forM_ (alchemyData^.allIngredients.ix ing2) $ \eff2 ->
+        when (S.notMember eff2 effs) $
+          modify $ multiMapInsert eff2 ing1
+
+    -- Add the effects to both ingredients
+    all' = (`execState` (alchemyData^.allIngredients)) $
+      forM_ effs $ \eff ->
+        modify $
+            multiMapInsert ing1 eff
+          . multiMapInsert ing2 eff
+
+    -- Set the overlap to the specified one
+    fullOverlap' = PM.insertPair ing1 ing2 effs (alchemyData^.fullOverlap)
 
 
 --------------------------------------------------------------------------------
