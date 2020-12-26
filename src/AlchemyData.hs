@@ -30,10 +30,13 @@ import           Control.Lens
     ( Ixed (ix)
     , TraversableWithIndex (itraversed)
     , asIndex
+    , at
     , filtered
     , makeFields
     , toListOf
+    , use
     , view
+    , (%=)
     , (&)
     , (^.)
     )
@@ -198,7 +201,7 @@ learnOverlap
 learnOverlap ing1 ing2 effs alchemyData =
   do
     checkConsistent
-    return $ AlchemyData p' n' all' fullOverlap'
+    return $ execState update alchemyData
   where
     -- Avoid contradicting pre-existing information.
     --
@@ -258,44 +261,35 @@ learnOverlap ing1 ing2 effs alchemyData =
     -- The following assumes that the given overlap is "consistent"
     ----------------------------------------------------------------------------
 
-    -- For every effect, add both ingredients to its positive map
-    p' = (`execState` (alchemyData^.positives)) $
+    update = do
+      -- Learn the effects on both ingredients
       forM_ effs $ \eff ->
         modify $
-            multiMapInsert eff ing1
-          . multiMapInsert eff ing2
+          learnIngredientEffect ing1 eff .
+          learnIngredientEffect ing2 eff
 
-    -- For every effect that is on one ingredient but not in the
-    -- overlap, add the other ingredient to its negative map
-    n' = (`execState` (alchemyData^.negatives)) $ do
-      forM_ (alchemyData^.allIngredients.ix ing1) $ \eff1 ->
-        when (S.notMember eff1 effs) $
-          modify $ multiMapInsert eff1 ing2
-
-      forM_ (alchemyData^.allIngredients.ix ing2) $ \eff2 ->
-        when (S.notMember eff2 effs) $
-          modify $ multiMapInsert eff2 ing1
-
-    -- Add the effects to both ingredients
-    all' = (`execState` (alchemyData^.allIngredients)) $
-      if not $ S.null effs
-      then
-        forM_ effs $ \eff ->
-          modify $
-              multiMapInsert ing1 eff
-            . multiMapInsert ing2 eff
-      else do
-        -- Ensure at least empty sets exist for the ingredients in
-        -- case the overlap is empty
-        let insertEmpty = \case
+      -- If 'effs' is null, we have to manually ensure the ingredients
+      -- are added to the allIngredients collection
+      when (S.null effs) $ do
+        let insertEmptyIfNothing = \case
               Nothing -> Just S.empty
               Just s  -> Just s
-        modify $
-            M.alter insertEmpty ing1
-          . M.alter insertEmpty ing2
+        allIngredients.at ing1 %= insertEmptyIfNothing
+        allIngredients.at ing2 %= insertEmptyIfNothing
 
-    -- Set the overlap to the specified one
-    fullOverlap' = PM.insertPair ing1 ing2 effs (alchemyData^.fullOverlap)
+      -- For any effect that is on one ingredient but not in the
+      -- overlap, add the other ingredient to its negatives set
+      use (allIngredients.ix ing1) >>= \effs1 ->
+        forM_ effs1 $ \eff1 ->
+          when (S.notMember eff1 effs) $
+            negatives %= multiMapInsert eff1 ing2
+      use (allIngredients.ix ing2) >>= \effs2 ->
+        forM_ effs2 $ \eff2 ->
+          when (S.notMember eff2 effs) $
+            negatives %= multiMapInsert eff2 ing1
+
+      -- Update the overlap map
+      fullOverlap %= PM.insertPair ing1 ing2 effs
 
 
 --------------------------------------------------------------------------------
