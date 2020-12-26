@@ -91,6 +91,15 @@ listNonEffectsOf
   -> m (S.Set AD.EffectName)
 listNonEffectsOf = gets . AD.nonEffectsOf
 
+listPotentialEffectsOf
+  :: Has (State AD.AlchemyData) sig m
+  => AD.IngredientName
+  -> m (S.Set AD.EffectName)
+listPotentialEffectsOf ing = do
+  allEffs <- listAllEffects
+  nonEffs <- listNonEffectsOf ing
+  return $ S.difference allEffs nonEffs
+
 listMaximalCliques
   :: Has (State AD.AlchemyData) sig m
   => m [S.Set AD.IngredientName]
@@ -253,6 +262,7 @@ data Command
   | ListEffects
   | ListEffectsOf AD.IngredientName
   | ListNonEffectsOf AD.IngredientName
+  | ListPotentialEffectsOf AD.IngredientName
   | ListIngredients
   | ListMaximalCliques
   | Exit
@@ -279,6 +289,7 @@ commandDef = MP.choice
   [ learnOverlapCommand
   , listEffectsOfCommand
   , listNonEffectsOfCommand
+  , listPotentialEffectsOfCommand
   , listEffectsCommand
   , listIngredientsCommand
   , listMaximalCliquesCommand
@@ -309,8 +320,13 @@ listEffectsOfCommand = do
 
 listNonEffectsOfCommand :: Parser Command
 listNonEffectsOfCommand = do
-  void (symbol "noneffects of" MP.<|> symbol "noneffects")
+  void (symbol "noneffects" >> MP.optional (symbol "of"))
   ListNonEffectsOf <$> ingredientName
+
+listPotentialEffectsOfCommand :: Parser Command
+listPotentialEffectsOfCommand = do
+  void (symbol "potential effects" >> MP.optional (symbol "of"))
+  ListPotentialEffectsOf <$> ingredientName
 
 listMaximalCliquesCommand :: Parser Command
 listMaximalCliquesCommand =
@@ -334,6 +350,8 @@ runCommand = \case
   ListEffectsOf ing    -> listEffectsOf ing >>= mapM_ (sendIO . print)
   ListNonEffectsOf ing -> listNonEffectsOf ing >>= mapM_ (sendIO . print)
   ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
+  ListPotentialEffectsOf ing ->
+    listPotentialEffectsOf ing >>= mapM_ (sendIO . print)
   ListMaximalCliques   -> do
     cliques <- listMaximalCliques
     forM_ cliques $ \clique -> do
