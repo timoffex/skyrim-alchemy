@@ -12,6 +12,7 @@ dependencies:
 - fused-effects-th >= 0.1.0.2
 - bytestring >= 0.10.8.2
 - text >= 1.2.3.1
+- megaparsec
 
 library:
   source-dirs: src

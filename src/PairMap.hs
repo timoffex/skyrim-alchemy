@@ -10,6 +10,7 @@ module PairMap
   -- * Querying
   , lookupPair
   , lookup
+  , assocs
   ) where
 
 import           Data.Foldable
@@ -49,11 +50,7 @@ insertPair k1 k2 a pm =
 
 deletePair :: Ord k => k -> k -> PairMap k a -> PairMap k a
 deletePair k1 k2 pm =
-  let
-    (lk, gk) = if k1 <= k2 then (k1, k2) else (k2, k1)
-    deleteNonEmpty k m =
-      let m' = M.delete k m
-      in if M.null m' then Nothing else Just m'
+  let (lk, gk) = if k1 <= k2 then (k1, k2) else (k2, k1)
   in PairMap
      { lesser = M.update (nothingIfEmpty . M.delete gk) lk (lesser pm)
      , greater = M.update (nothingIfEmpty . M.delete lk) gk (greater pm)
@@ -112,3 +109,11 @@ split k m = ( M.filterWithKey (\k' _ -> k <= k') m
 
 nothingIfEmpty :: M.Map k a -> Maybe (M.Map k a)
 nothingIfEmpty m = if M.null m then Nothing else Just m
+
+
+assocs :: Ord k => PairMap k a -> [((k, k), a)]
+assocs pm = do
+  (k1, others) <- M.assocs (lesser pm)
+  (k2, a) <- M.assocs others
+  let (lk, gk) = if k1 <= k2 then (k1, k2) else (k2, k1)
+  return ((lk, gk), a)

@@ -1,135 +1,197 @@
 {-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeApplications      #-}
 
-import           Alchemy              (Alchemy, EffectName (EffectName),
-                                       IngredientData (IngredientData),
-                                       IngredientName (IngredientName),
-                                       getNonOverlappingIngredients,
-                                       ingredientDataEffects,
-                                       ingredientDataName,
-                                       ingredientDataNonOverlaps,
-                                       learnNonOverlapping, listAllEffects,
-                                       listAllIngredients, runAlchemyC,
-                                       snapshotData, snapshotIngredient)
-import           Control.Carrier.Lift (Has, Lift, runM, sendIO)
-import           Control.Monad        (forM, forever, replicateM_)
-import           Data.Coerce          (coerce)
-import           Data.Foldable        (forM_)
-import           Data.List            (intercalate)
-import           Data.List.Split      (dropBlanks, dropDelims, onSublist, split)
-import qualified Data.Set             as S
-import qualified Data.Text            as T
-import           System.Environment   (getArgs)
-import           System.IO            (hFlush, stdout)
-
-
--- | Attempts to parse a string as an 'IngredientRow'.
-parseIngredientRow
-  :: String -> Maybe IngredientData
-parseIngredientRow s =
-  let
-    splitOnCommas = split (dropDelims $ dropBlanks $ onSublist ",")
-    splitOnColon = split (dropDelims $ onSublist ":")
-  in case splitOnColon s of
-    [ingName,effs,others] ->
-      let
-        effNames = splitOnCommas effs
-        otherNames = splitOnCommas others
-      in Just $ IngredientData
-           (coerce ingName)
-           (S.fromList $ coerce effNames)
-           (S.fromList $ coerce otherNames)
-    _ -> Nothing
-
-
-unparseIngredientRow
-  :: IngredientData -> String
-unparseIngredientRow x =
-  show (ingredientDataName x) ++
-  ":" ++
-  intercalate "," (show <$> S.toList (ingredientDataEffects x)) ++
-  ":" ++
-  intercalate "," (show <$> S.toList (ingredientDataNonOverlaps x))
-
+import qualified AlchemyData                  as AD
+import           Control.Carrier.Lift
+    ( Has )
+import           Control.Carrier.State.Strict
+import           Control.Carrier.Throw.Either
+import           Control.Effect.State
+    ( State, get, gets, modify, put )
+import           Control.Effect.Throw
+    ( Throw, throwError )
+import           Control.Monad
+    ( void )
+import           Control.Monad.Trans.Class
+import           Data.Foldable
+    ( forM_ )
+import           Data.List
+import qualified Data.Set                     as S
+import           Data.Void
+    ( Void )
+import           System.Environment
+import           System.IO
+import qualified Text.Megaparsec              as MP
+import qualified Text.Megaparsec.Char         as MP
+import qualified Text.Megaparsec.Char.Lexer   as L
 
 main :: IO ()
 main = do
-  [fileName] <- getArgs
-  !contents  <- readFile fileName
+  -- Use LineBuffering to handle backspaces like the user expects
+  hSetBuffering stdin LineBuffering
 
-  -- Read in ingredients
-  rows <- forM (indexedLines contents) $ \(i, line) -> do
-    case parseIngredientRow line of
-      Nothing  -> fail $
-                  "Error in ingredients file on line " ++
-                  show i ++
-                  ": '" ++ line ++ "'"
-      Just row -> return row
+  [inputFile] <- getArgs
+  !inputFileContents <- readFile inputFile
 
-  putStrLn "Parsed successfully!"
-
-  runM $ runAlchemyC rows $ do
-    sendIO $ putStrLn "Printing all effects..."
-    effs <- listAllEffects
-    forM_ effs $ sendIO . print
+  case MP.parse ingredientFile inputFile inputFileContents of
+    Left bundle       -> putStr (MP.errorBundlePretty bundle)
+    Right initialData -> do
+      putStrLn "Parsed successfully!"
+      writeFile "output.txt" $ serializeAlchemyData initialData
 
 
-    sendIO $ putStrLn "Printing all ingredients..."
-    ings <- listAllIngredients
-    forM_ ings $ \ing -> do
-      snapshot <- snapshotIngredient ing
-      sendIO $ print snapshot
+--------------------------------------------------------------------------------
+-- Stateful AlchemyData computations
+--------------------------------------------------------------------------------
 
-    replicateM_ 3 $ sendIO $ putStrLn ""
+listAllEffects
+  :: Has (State AD.AlchemyData) sig m
+  => m (S.Set AD.EffectName)
+listAllEffects = gets AD.allKnownEffects
 
+listAllIngredients
+  :: Has (State AD.AlchemyData) sig m
+  => m (S.Set AD.IngredientName)
+listAllIngredients = gets AD.allKnownIngredients
 
-    sendIO $ putStrLn "Enter names of two non-overlapping ingredients..."
-    -- name1 <- prompt "Name 1: " <&> trimToIngredientName
-    -- name2 <- prompt "Name 2: " <&> trimToIngredientName
-    let name1 = coerce "Purple Mountain Flower"
-        name2 = coerce "Blue Mountain Flower"
-    learnNonOverlapping name1 name2
+learnIngredientEffect
+  :: Has (State AD.AlchemyData) sig m
+  => AD.IngredientName
+  -> AD.EffectName
+  -> m ()
+learnIngredientEffect ing eff = modify $ AD.learnIngredientEffect ing eff
 
-
-    forever interactNonOverlapping
-
-
-    sendIO $ putStrLn "Saving back to output.txt..."
-    finalData <- snapshotData
-    sendIO $ writeFile "output.txt" $
-      unlines (unparseIngredientRow <$> finalData)
-
-
-
-interactNonOverlapping
-  :: ( Has Alchemy sig m
-     , Has (Lift IO) sig m
-     )
-  => m ()
-interactNonOverlapping = do
-  name <- prompt "Enter an ingredient name: " <&> trimToIngredientName
-
-  others <- getNonOverlappingIngredients name
-  sendIO $ putStrLn $
-    "Non-overlapping ingredients for " ++ coerce name ++ ":"
-  forM_ others $ sendIO . print
+tryLearnOverlap
+  :: ( Has (State AD.AlchemyData) sig m
+     , Has (Throw String) sig m )
+  => AD.IngredientName
+  -> AD.IngredientName
+  -> S.Set AD.EffectName
+  -> m ()
+tryLearnOverlap ing1 ing2 effs = do
+  alch <- get
+  case AD.learnOverlap ing1 ing2 effs alch of
+    Left err    -> throwError $ show err
+    Right alch' -> put alch'
 
 
-prompt :: ( Has (Lift IO) sig m ) => String -> m String
-prompt s = sendIO $ do
-  putStr s
-  hFlush stdout
-  getLine
+--------------------------------------------------------------------------------
+-- Parsing an ingredient save file
+--------------------------------------------------------------------------------
 
 
-trimToIngredientName :: String -> IngredientName
-trimToIngredientName = IngredientName . T.unpack . T.strip . T.pack
+type Parser = MP.Parsec Void String
+
+sc :: Parser ()
+sc = L.space
+  MP.space1
+  (L.skipLineComment "//")
+  (L.skipBlockComment "/*" "*/")
+
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme sc
+
+symbol :: String -> Parser String
+symbol = L.symbol sc
 
 
-indexedLines :: String -> [(Int, String)]
-indexedLines = zip [0..] . lines
+-- TODO: Layer StateC AD.AlchemyData on top of the parser and report
+-- overlap problems with a line number. I'll need an Algebra instance
+-- for MP.ParseT for the Lift effect.
+ingredientFile :: Parser AD.AlchemyData
+ingredientFile = do
+  ings <- MP.many ingredientDef
+  overlaps <- MP.many overlapDef
+  MP.eof
+
+  let alch = run .
+             runThrow @AD.InconsistentOverlap .
+             execState AD.emptyAlchemyData $ do
+        forM_ ings $ \(IngredientDef ingName effs) ->
+          forM_ effs $ \eff ->
+            modify $ AD.learnIngredientEffect ingName eff
+
+        forM_ overlaps $ \(OverlapDef ing1 ing2 effs) -> do
+          alch0 <- get
+          alch1 <- liftEither $ AD.learnOverlap ing1 ing2 effs alch0
+          put alch1
+
+  case alch of
+    Left err      -> fail $ show err
+    Right success -> return success
 
 
-(<&>) :: Functor f => f a -> (a -> b) -> f b
-(<&>) = flip (<$>)
+data IngredientDef
+  = IngredientDef AD.IngredientName (S.Set AD.EffectName)
+data OverlapDef
+  = OverlapDef AD.IngredientName AD.IngredientName (S.Set AD.EffectName)
+
+
+
+ingredientDef :: Parser IngredientDef
+ingredientDef = lexeme $ do
+  void (symbol "!ING")
+  ingName <- ingredientName
+  void (symbol ":")
+  effNames <- effectName `MP.sepEndBy` symbol ","
+
+  return $ IngredientDef ingName (S.fromList effNames)
+
+
+namePart :: Parser String
+namePart = MP.some (MP.alphaNumChar MP.<|> MP.char '\'')
+
+ingredientName :: Parser AD.IngredientName
+ingredientName = AD.IngredientName . unwords <$>
+  namePart `MP.sepEndBy1` MP.space1
+
+effectName :: Parser AD.EffectName
+effectName = AD.EffectName . unwords <$>
+  namePart `MP.sepEndBy1` MP.space1
+
+overlapDef :: Parser OverlapDef
+overlapDef = lexeme $ do
+  void (symbol "!OVERLAP")
+
+  ingName1 <- ingredientName
+  void (symbol ",")
+  ingName2 <- ingredientName
+  void (symbol ":")
+  effNames <- effectName `MP.sepEndBy` symbol ","
+
+  return $ OverlapDef ingName1 ingName2 (S.fromList effNames)
+
+--------------------------------------------------------------------------------
+-- Saving an AlchemyData to a save file
+--------------------------------------------------------------------------------
+
+serializeAlchemyData :: AD.AlchemyData -> String
+serializeAlchemyData alchemyData = run . execState "" $ do
+  let
+    append s = modify (++ s)
+    newline = append "\n"
+
+  -- Print all known ingredients
+  forM_ (AD.allKnownIngredients alchemyData) $ \ing -> do
+    append "!ING "
+    append $ show ing
+    append ": "
+    forM_ (AD.effectsOf ing alchemyData) $ \eff -> do
+      append $ show eff
+      append ", "
+    newline
+
+  -- Print all known overlaps
+  forM_ (AD.allKnownOverlaps alchemyData) $ \((ing1, ing2), effs) -> do
+    append "!OVERLAP "
+    append $ show ing1
+    append ", "
+    append $ show ing2
+    append ": "
+    forM_ effs $ \eff -> do
+      append $ show eff
+      append ", "
+    newline

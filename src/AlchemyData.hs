@@ -1,11 +1,12 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE TemplateHaskell        #-}
 
 module AlchemyData
-  ( IngredientName
-  , EffectName
+  ( IngredientName (IngredientName)
+  , EffectName (EffectName)
   , AlchemyData
 
   -- * Construction
@@ -16,9 +17,12 @@ module AlchemyData
   -- * Queries
   , allKnownIngredients
   , allKnownEffects
+  , allKnownOverlaps
   , effectsOf, effectsOfIngredientIn
   , nonEffectsOf, nonEffectsOfIngredientIn
   , ingredientsNotOverlappingWith
+  , overlapBetween
+  , InconsistentOverlap
   ) where
 
 
@@ -96,6 +100,11 @@ allKnownEffects :: AlchemyData -> S.Set EffectName
 allKnownEffects alchemyData =
   S.fromList $ M.keys $ alchemyData^.positives
 
+-- | Gets all known overlaps between ingredients.
+allKnownOverlaps
+  :: AlchemyData
+  -> [((IngredientName, IngredientName), S.Set EffectName)]
+allKnownOverlaps alchemyData = PM.assocs (alchemyData^.fullOverlap)
 
 -- | Gets the known effects of the ingredient.
 effectsOf :: IngredientName -> AlchemyData -> S.Set EffectName
@@ -129,6 +138,13 @@ ingredientsNotOverlappingWith ingName alchemyData =
   M.keys &
   S.fromList
 
+-- | Gets the full overlap between the two ingredients if it is known.
+overlapBetween
+  :: IngredientName
+  -> IngredientName
+  -> AlchemyData
+  -> Maybe (S.Set EffectName)
+overlapBetween ing1 ing2 = PM.lookupPair ing1 ing2 . view fullOverlap
 
 
 -- | Associates the effect to the ingredient.
@@ -262,10 +278,21 @@ learnOverlap ing1 ing2 effs alchemyData =
 
     -- Add the effects to both ingredients
     all' = (`execState` (alchemyData^.allIngredients)) $
-      forM_ effs $ \eff ->
+      if not $ S.null effs
+      then
+        forM_ effs $ \eff ->
+          modify $
+              multiMapInsert ing1 eff
+            . multiMapInsert ing2 eff
+      else do
+        -- Ensure at least empty sets exist for the ingredients in
+        -- case the overlap is empty
+        let insertEmpty = \case
+              Nothing -> Just S.empty
+              Just s  -> Just s
         modify $
-            multiMapInsert ing1 eff
-          . multiMapInsert ing2 eff
+            M.alter insertEmpty ing1
+          . M.alter insertEmpty ing2
 
     -- Set the overlap to the specified one
     fullOverlap' = PM.insertPair ing1 ing2 effs (alchemyData^.fullOverlap)
@@ -280,7 +307,6 @@ multiMapInsert
   :: ( Ord k, Ord a )
   => k -> a -> M.Map k (S.Set a) -> M.Map k (S.Set a)
 multiMapInsert k a = M.insertWith (<>) k (S.singleton a)
-
 
 multiMapRemove
   :: ( Ord k, Ord a )
