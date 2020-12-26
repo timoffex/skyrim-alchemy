@@ -1,8 +1,8 @@
-{-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 
 import qualified AlchemyData                  as AD
@@ -26,27 +26,28 @@ import           Data.Foldable
     ( forM_ )
 import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
+import qualified Data.Text                    as T
+import qualified Data.Text.Lazy               as LT
 import           Data.Void
     ( Void )
 import           System.Console.Readline
     ( addHistory, readline )
 import           System.Exit
     ( exitSuccess )
-import           System.IO
-    ( BufferMode (LineBuffering), hSetBuffering, stdin )
 import qualified Text.Megaparsec              as MP
 import qualified Text.Megaparsec.Char         as MP
 import qualified Text.Megaparsec.Char.Lexer   as L
 
 main :: IO ()
 main = do
-  -- Use LineBuffering to handle backspaces like the user expects
-  hSetBuffering stdin LineBuffering
-
   let inputFile = "output.txt"
       outputFile = inputFile
-  !inputFileContents <- readFile inputFile
 
+  -- Use lazy text for parsing the file to be able to support very
+  -- large files without loading them completely into memory. I
+  -- haven't benchmarked this, and it's 100% a premature optimization,
+  -- but it makes me happy.
+  inputFileContents <- LT.pack <$> readFile inputFile
   case MP.parse ingredientFile inputFile inputFileContents of
     Left bundle       -> putStr (MP.errorBundlePretty bundle)
     Right initialData -> do
@@ -98,6 +99,8 @@ listMaximalCliques = bronKerbosch <$> do
 
   let overlaps = AD.allKnownOverlaps alch
 
+  -- Construct an adjacency map from the overlaps where two
+  -- ingredients are adjacent iff they have an empty overlap.
   return $ run $ execState M.empty $
     forM_ overlaps $ \((ing1, ing2), effs) ->
       when (S.null effs) $ do
@@ -106,7 +109,7 @@ listMaximalCliques = bronKerbosch <$> do
 
 tryLearnOverlap
   :: ( Has (State AD.AlchemyData) sig m
-     , Has (Throw String) sig m )
+     , Has (Throw T.Text) sig m )
   => AD.IngredientName
   -> AD.IngredientName
   -> S.Set AD.EffectName
@@ -114,7 +117,7 @@ tryLearnOverlap
 tryLearnOverlap ing1 ing2 effs = do
   alch <- get
   case AD.learnOverlap ing1 ing2 effs alch of
-    Left err    -> throwError $ show err
+    Left err    -> throwError $ T.pack $ show err
     Right alch' -> put alch'
 
 
@@ -122,7 +125,8 @@ tryLearnOverlap ing1 ing2 effs = do
 -- Parser helpers
 --------------------------------------------------------------------------------
 
-type Parser = MP.Parsec Void String
+-- Use lazy text for parsing.
+type Parser = MP.Parsec Void LT.Text
 
 sc :: Parser ()
 sc = L.space
@@ -133,8 +137,8 @@ sc = L.space
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
-symbol :: String -> Parser String
-symbol = L.symbol sc
+symbol :: T.Text -> Parser T.Text
+symbol = fmap LT.toStrict . L.symbol sc . LT.fromStrict
 
 --------------------------------------------------------------------------------
 -- Parsing an ingredient save file
@@ -184,15 +188,15 @@ ingredientDef = lexeme $ do
   return $ IngredientDef ingName (S.fromList effNames)
 
 
-namePart :: Parser String
-namePart = MP.some (MP.alphaNumChar MP.<|> MP.char '\'')
+namePart :: Parser T.Text
+namePart = T.pack <$> MP.some (MP.alphaNumChar MP.<|> MP.char '\'')
 
 ingredientName :: Parser AD.IngredientName
-ingredientName = AD.ingredientName . unwords <$>
+ingredientName = AD.ingredientName . T.unwords <$>
   namePart `MP.sepEndBy1` MP.space1
 
 effectName :: Parser AD.EffectName
-effectName = AD.effectName . unwords <$>
+effectName = AD.effectName . T.unwords <$>
   namePart `MP.sepEndBy1` MP.space1
 
 overlapDef :: Parser OverlapDef
@@ -263,7 +267,7 @@ tryReadCommand = do
     Nothing -> return $ Just Exit
     Just s -> do
       addHistory s
-      case MP.parse commandDef "input" s of
+      case MP.parse commandDef "input" (LT.pack s) of
         Left err  -> do
           putStr (MP.errorBundlePretty err)
           return Nothing
@@ -338,7 +342,7 @@ runCommand = \case
       sendIO $ putStrLn ""
   LearnOverlap ing1 ing2 effs ->
     runThrow (tryLearnOverlap ing1 ing2 effs) >>= \case
-      Left err -> sendIO $ putStrLn $ "Error: " ++ err
+      Left err -> sendIO $ putStrLn $ "Error: " ++ T.unpack err
       Right () -> return ()
 
 

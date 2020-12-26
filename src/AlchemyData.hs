@@ -73,11 +73,11 @@ instance Show EffectName where
 
 
 -- Ignore case in names
-ingredientName :: String -> IngredientName
-ingredientName = IngredientName . T.toLower . T.pack
+ingredientName :: T.Text -> IngredientName
+ingredientName = IngredientName . T.toLower
 
-effectName :: String -> EffectName
-effectName = EffectName . T.toLower . T.pack
+effectName :: T.Text -> EffectName
+effectName = EffectName . T.toLower
 
 
 data AlchemyData
