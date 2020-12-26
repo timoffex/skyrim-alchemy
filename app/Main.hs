@@ -30,8 +30,6 @@ import           Data.Void
     ( Void )
 import           System.Console.Readline
     ( addHistory, readline )
-import           System.Environment
-    ( getArgs )
 import           System.Exit
     ( exitSuccess )
 import           System.IO
@@ -45,7 +43,8 @@ main = do
   -- Use LineBuffering to handle backspaces like the user expects
   hSetBuffering stdin LineBuffering
 
-  [inputFile] <- getArgs
+  let inputFile = "output.txt"
+      outputFile = inputFile
   !inputFileContents <- readFile inputFile
 
   case MP.parse ingredientFile inputFile inputFileContents of
@@ -57,7 +56,7 @@ main = do
         -- Save before every command.
         get >>=
           sendIO .
-          writeFile "output.txt" .
+          writeFile outputFile .
           serializeAlchemyData
 
         sendIO tryReadCommand >>= \case
