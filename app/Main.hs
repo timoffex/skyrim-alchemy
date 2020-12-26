@@ -1,29 +1,38 @@
 {-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeApplications      #-}
 
 import qualified AlchemyData                  as AD
 import           Control.Carrier.Lift
-    ( Has )
+    ( Has, runM )
 import           Control.Carrier.State.Strict
+    ( evalState, execState, run )
 import           Control.Carrier.Throw.Either
+    ( liftEither, runThrow )
+import           Control.Effect.Lift
+    ( Lift, sendIO )
 import           Control.Effect.State
     ( State, get, gets, modify, put )
 import           Control.Effect.Throw
     ( Throw, throwError )
 import           Control.Monad
-    ( void )
-import           Control.Monad.Trans.Class
+    ( forever, void )
 import           Data.Foldable
     ( forM_ )
-import           Data.List
 import qualified Data.Set                     as S
 import           Data.Void
     ( Void )
+import           System.Console.Readline
+    ( addHistory, readline )
 import           System.Environment
+    ( getArgs )
+import           System.Exit
+    ( exitSuccess )
 import           System.IO
+    ( BufferMode (LineBuffering), hSetBuffering, stdin )
 import qualified Text.Megaparsec              as MP
 import qualified Text.Megaparsec.Char         as MP
 import qualified Text.Megaparsec.Char.Lexer   as L
@@ -40,7 +49,17 @@ main = do
     Left bundle       -> putStr (MP.errorBundlePretty bundle)
     Right initialData -> do
       putStrLn "Parsed successfully!"
-      writeFile "output.txt" $ serializeAlchemyData initialData
+
+      runM . evalState initialData $ forever $ do
+        -- Save before every command.
+        get >>=
+          sendIO .
+          writeFile "output.txt" .
+          serializeAlchemyData
+
+        sendIO tryReadCommand >>= \case
+          Nothing -> sendIO $ putStrLn "Invalid command."
+          Just cmd -> runCommand cmd
 
 
 --------------------------------------------------------------------------------
@@ -57,12 +76,17 @@ listAllIngredients
   => m (S.Set AD.IngredientName)
 listAllIngredients = gets AD.allKnownIngredients
 
-learnIngredientEffect
+listEffectsOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
-  -> AD.EffectName
-  -> m ()
-learnIngredientEffect ing eff = modify $ AD.learnIngredientEffect ing eff
+  -> m (S.Set AD.EffectName)
+listEffectsOf = gets . AD.effectsOf
+
+listNonEffectsOf
+  :: Has (State AD.AlchemyData) sig m
+  => AD.IngredientName
+  -> m (S.Set AD.EffectName)
+listNonEffectsOf = gets . AD.nonEffectsOf
 
 tryLearnOverlap
   :: ( Has (State AD.AlchemyData) sig m
@@ -79,9 +103,8 @@ tryLearnOverlap ing1 ing2 effs = do
 
 
 --------------------------------------------------------------------------------
--- Parsing an ingredient save file
+-- Parser helpers
 --------------------------------------------------------------------------------
-
 
 type Parser = MP.Parsec Void String
 
@@ -97,6 +120,9 @@ lexeme = L.lexeme sc
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
+--------------------------------------------------------------------------------
+-- Parsing an ingredient save file
+--------------------------------------------------------------------------------
 
 -- TODO: Layer StateC AD.AlchemyData on top of the parser and report
 -- overlap problems with a line number. I'll need an Algebra instance
@@ -195,3 +221,93 @@ serializeAlchemyData alchemyData = run . execState "" $ do
       append $ show eff
       append ", "
     newline
+
+
+--------------------------------------------------------------------------------
+-- Command-line interface
+--------------------------------------------------------------------------------
+
+data Command
+  = LearnOverlap AD.IngredientName AD.IngredientName (S.Set AD.EffectName)
+  | ListEffects
+  | ListEffectsOf AD.IngredientName
+  | ListNonEffectsOf AD.IngredientName
+  | ListIngredients
+  | Exit
+
+----------------------------------------
+-- Parsing
+----------------------------------------
+
+tryReadCommand :: IO (Maybe Command)
+tryReadCommand = do
+  readline ">>> " >>= \case
+    Nothing -> return $ Just Exit
+    Just s -> do
+      addHistory s
+      case MP.parse commandDef "input" s of
+        Left err  -> do
+          putStr (MP.errorBundlePretty err)
+          return Nothing
+        Right cmd -> do
+          return $ Just cmd
+
+commandDef :: Parser Command
+commandDef = MP.choice
+  [ learnOverlapCommand
+  , listEffectsOfCommand
+  , listNonEffectsOfCommand
+  , listEffectsCommand
+  , listIngredientsCommand
+  , exitCommand ]
+
+learnOverlapCommand :: Parser Command
+learnOverlapCommand = do
+  void (symbol "overlap")
+  ingName1 <- ingredientName
+  void (symbol ",")
+  ingName2 <- ingredientName
+  void (symbol ":")
+  effs <- effectName `MP.sepEndBy` symbol ","
+  return $ LearnOverlap ingName1 ingName2 (S.fromList effs)
+
+listEffectsCommand :: Parser Command
+listEffectsCommand =
+  symbol "effects" >> MP.eof >> return ListEffects
+
+listIngredientsCommand :: Parser Command
+listIngredientsCommand =
+  symbol "ingredients" >> MP.eof >> return ListIngredients
+
+listEffectsOfCommand :: Parser Command
+listEffectsOfCommand = do
+  void (symbol "effects of")
+  ListEffectsOf <$> ingredientName
+
+listNonEffectsOfCommand :: Parser Command
+listNonEffectsOfCommand = do
+  void (symbol "noneffects of" MP.<|> symbol "noneffects")
+  ListNonEffectsOf <$> ingredientName
+
+exitCommand :: Parser Command
+exitCommand = symbol "exit" >> return Exit
+
+----------------------------------------
+-- Interpreting
+----------------------------------------
+
+runCommand
+  :: ( Has (Lift IO) sig m
+     , Has (State AD.AlchemyData) sig m )
+  => Command
+  -> m ()
+runCommand = \case
+  Exit                 -> sendIO exitSuccess
+  ListEffects          -> listAllEffects >>= mapM_ (sendIO . print)
+  ListEffectsOf ing    -> listEffectsOf ing >>= mapM_ (sendIO . print)
+  ListNonEffectsOf ing -> listNonEffectsOf ing >>= mapM_ (sendIO . print)
+  ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
+  LearnOverlap ing1 ing2 effs ->
+    runThrow (tryLearnOverlap ing1 ing2 effs) >>= \case
+      Left err -> sendIO $ putStrLn $ "Error: " ++ err
+      Right () -> return ()

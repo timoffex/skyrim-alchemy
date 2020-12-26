@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: dfe9017731ff51ceb87bc98cad8ef9aa371c6c4ea7096d18bb6ac6bfec163123
+-- hash: ce3f99256a808e86da1075640f04a2acb1fc3b271d58b8dcac17c57e4c51947d
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -14,7 +14,6 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Alchemy
       AlchemyData
       PairMap
   other-modules:
@@ -29,6 +28,7 @@ library
     , fused-effects-th >=0.1.0.2
     , lens >=4.19.2
     , megaparsec
+    , readline >=1.0.3.0
     , split >=0.2.3.3
     , text >=1.2.3.1
     , transformers >=0.5.6.2
@@ -49,6 +49,7 @@ executable skyrim-alchemy-exe
     , fused-effects-th >=0.1.0.2
     , lens >=4.19.2
     , megaparsec
+    , readline >=1.0.3.0
     , skyrim-alchemy
     , split >=0.2.3.3
     , text >=1.2.3.1

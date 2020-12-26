@@ -119,7 +119,7 @@ nonEffectsOf :: IngredientName -> AlchemyData -> S.Set EffectName
 nonEffectsOf ingName = S.fromList . toListOf
   ( negatives
   . itraversed
-  . filtered (S.notMember ingName)
+  . filtered (S.member ingName)
   . asIndex )
 
 nonEffectsOfIngredientIn :: AlchemyData -> IngredientName -> S.Set EffectName
