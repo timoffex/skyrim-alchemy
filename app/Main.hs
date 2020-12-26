@@ -6,6 +6,8 @@
 {-# LANGUAGE TypeApplications      #-}
 
 import qualified AlchemyData                  as AD
+import           BronKerbosch
+    ( bronKerbosch )
 import           Control.Carrier.Lift
     ( Has, runM )
 import           Control.Carrier.State.Strict
@@ -19,9 +21,10 @@ import           Control.Effect.State
 import           Control.Effect.Throw
     ( Throw, throwError )
 import           Control.Monad
-    ( forever, void )
+    ( forever, void, when )
 import           Data.Foldable
     ( forM_ )
+import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
 import           Data.Void
     ( Void )
@@ -87,6 +90,20 @@ listNonEffectsOf
   => AD.IngredientName
   -> m (S.Set AD.EffectName)
 listNonEffectsOf = gets . AD.nonEffectsOf
+
+listMaximalCliques
+  :: Has (State AD.AlchemyData) sig m
+  => m [S.Set AD.IngredientName]
+listMaximalCliques = bronKerbosch <$> do
+  alch <- get
+
+  let overlaps = AD.allKnownOverlaps alch
+
+  return $ run $ execState M.empty $
+    forM_ overlaps $ \((ing1, ing2), effs) ->
+      when (S.null effs) $ do
+        modify $ multiMapInsert ing1 ing2
+        modify $ multiMapInsert ing2 ing1
 
 tryLearnOverlap
   :: ( Has (State AD.AlchemyData) sig m
@@ -234,6 +251,7 @@ data Command
   | ListEffectsOf AD.IngredientName
   | ListNonEffectsOf AD.IngredientName
   | ListIngredients
+  | ListMaximalCliques
   | Exit
 
 ----------------------------------------
@@ -260,6 +278,7 @@ commandDef = MP.choice
   , listNonEffectsOfCommand
   , listEffectsCommand
   , listIngredientsCommand
+  , listMaximalCliquesCommand
   , exitCommand ]
 
 learnOverlapCommand :: Parser Command
@@ -290,6 +309,10 @@ listNonEffectsOfCommand = do
   void (symbol "noneffects of" MP.<|> symbol "noneffects")
   ListNonEffectsOf <$> ingredientName
 
+listMaximalCliquesCommand :: Parser Command
+listMaximalCliquesCommand =
+  symbol "cliques" >> MP.eof >> return ListMaximalCliques
+
 exitCommand :: Parser Command
 exitCommand = symbol "exit" >> return Exit
 
@@ -308,7 +331,25 @@ runCommand = \case
   ListEffectsOf ing    -> listEffectsOf ing >>= mapM_ (sendIO . print)
   ListNonEffectsOf ing -> listNonEffectsOf ing >>= mapM_ (sendIO . print)
   ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
+  ListMaximalCliques   -> do
+    cliques <- listMaximalCliques
+    forM_ cliques $ \clique -> do
+      sendIO $ putStrLn "Clique:"
+      mapM_ (sendIO . print) clique
+      sendIO $ putStrLn ""
   LearnOverlap ing1 ing2 effs ->
     runThrow (tryLearnOverlap ing1 ing2 effs) >>= \case
       Left err -> sendIO $ putStrLn $ "Error: " ++ err
       Right () -> return ()
+
+
+
+--------------------------------------------------------------------------------
+-- Utilities
+--------------------------------------------------------------------------------
+
+
+multiMapInsert
+  :: ( Ord k, Ord a )
+  => k -> a -> M.Map k (S.Set a) -> M.Map k (S.Set a)
+multiMapInsert k a = M.insertWith (<>) k (S.singleton a)
