@@ -2,11 +2,12 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TemplateHaskell        #-}
 
 module AlchemyData
-  ( IngredientName (IngredientName)
-  , EffectName (EffectName)
+  ( IngredientName, ingredientName
+  , EffectName, effectName
   , AlchemyData
 
   -- * Construction
@@ -51,25 +52,32 @@ import qualified Data.Map.Strict           as M
 import           Data.Maybe
     ( isNothing )
 import qualified Data.Set                  as S
+import qualified Data.Text                 as T
 import qualified PairMap                   as PM
 
 
 newtype IngredientName
-  = IngredientName String
+  = IngredientName T.Text
   deriving ( Eq, Ord )
 
 newtype EffectName
-  = EffectName String
+  = EffectName T.Text
   deriving ( Eq, Ord )
 
 
--- Let these names print like normal strings
+-- Let these names print in title case
 instance Show IngredientName where
-  show = coerce
+  show = T.unpack . T.toTitle . coerce
 instance Show EffectName where
-  show = coerce
+  show = T.unpack . T.toTitle . coerce
 
 
+-- Ignore case in names
+ingredientName :: String -> IngredientName
+ingredientName = IngredientName . T.toLower . T.pack
+
+effectName :: String -> EffectName
+effectName = EffectName . T.toLower . T.pack
 
 
 data AlchemyData
@@ -199,9 +207,9 @@ learnIngredientEffect ingName effName alchemyData =
       else id
 
 
-newtype InconsistentOverlap = InconsistentOverlapReason String
+newtype InconsistentOverlap = InconsistentOverlapReason T.Text
 instance Show InconsistentOverlap where
-  show = coerce
+  show = T.unpack . coerce
 
 
 learnOverlap
@@ -255,8 +263,8 @@ learnOverlap ing1 ing2 effs alchemyData =
       forM_ effs $ \eff ->
         when (isImpossible eff) $
           throwInconsistent $
-            "Overlap includes effect " ++
-            show eff ++
+            "Overlap includes effect " <>
+            T.pack (show eff) <>
             " that's known to not exist on one of the ingredients."
 
     checkConsistent = do
@@ -264,8 +272,8 @@ learnOverlap ing1 ing2 effs alchemyData =
         throwInconsistent "Overlap already known"
       unless overlapIncludesCommonEffects $
         throwInconsistent $
-          "Overlap doesn't include effects common to both ingredients: " ++
-          show (S.toList commonEffects)
+          "Overlap doesn't include effects common to both ingredients: " <>
+          T.pack (show $ S.toList commonEffects)
       checkOverlapExcludesImpossibleEffects
 
 

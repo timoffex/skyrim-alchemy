@@ -188,11 +188,11 @@ namePart :: Parser String
 namePart = MP.some (MP.alphaNumChar MP.<|> MP.char '\'')
 
 ingredientName :: Parser AD.IngredientName
-ingredientName = AD.IngredientName . unwords <$>
+ingredientName = AD.ingredientName . unwords <$>
   namePart `MP.sepEndBy1` MP.space1
 
 effectName :: Parser AD.EffectName
-effectName = AD.EffectName . unwords <$>
+effectName = AD.effectName . unwords <$>
   namePart `MP.sepEndBy1` MP.space1
 
 overlapDef :: Parser OverlapDef
