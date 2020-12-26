@@ -136,7 +136,8 @@ ingredientFile = do
   let alch = run .
              runThrow @AD.InconsistentOverlap .
              execState AD.emptyAlchemyData $ do
-        forM_ ings $ \(IngredientDef ingName effs) ->
+        forM_ ings $ \(IngredientDef ingName effs) -> do
+          modify $ AD.learnIngredient ingName
           forM_ effs $ \eff ->
             modify $ AD.learnIngredientEffect ingName eff
 

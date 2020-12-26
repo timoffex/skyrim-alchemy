@@ -11,6 +11,7 @@ module AlchemyData
 
   -- * Construction
   , emptyAlchemyData
+  , learnIngredient
   , learnIngredientEffect
   , learnOverlap
 
@@ -150,6 +151,17 @@ overlapBetween
 overlapBetween ing1 ing2 = PM.lookupPair ing1 ing2 . view fullOverlap
 
 
+-- | Acknowledges the existence of the ingredient.
+learnIngredient
+  :: IngredientName
+  -> AlchemyData
+  -> AlchemyData
+learnIngredient ingName = execState $ do
+  allIngredients.at ingName %= \case
+    Nothing -> Just S.empty
+    Just s  -> Just s
+
+
 -- | Associates the effect to the ingredient.
 learnIngredientEffect
   :: IngredientName
@@ -262,20 +274,16 @@ learnOverlap ing1 ing2 effs alchemyData =
     ----------------------------------------------------------------------------
 
     update = do
+      -- Learn the ingredients
+      modify $
+        learnIngredient ing1 .
+        learnIngredient ing2
+
       -- Learn the effects on both ingredients
       forM_ effs $ \eff ->
         modify $
           learnIngredientEffect ing1 eff .
           learnIngredientEffect ing2 eff
-
-      -- If 'effs' is null, we have to manually ensure the ingredients
-      -- are added to the allIngredients collection
-      when (S.null effs) $ do
-        let insertEmptyIfNothing = \case
-              Nothing -> Just S.empty
-              Just s  -> Just s
-        allIngredients.at ing1 %= insertEmptyIfNothing
-        allIngredients.at ing2 %= insertEmptyIfNothing
 
       -- For any effect that is on one ingredient but not in the
       -- overlap, add the other ingredient to its negatives set
