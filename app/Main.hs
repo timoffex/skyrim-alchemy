@@ -460,7 +460,7 @@ runCommand = \case
   ListNonEffectsOf ing -> listNonEffectsOf ing >>= mapM_ (sendIO . print)
   ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
   ListPotentialEffectsOf ing ->
-    listPotentialEffectsOf ing >>= mapM_ (sendIO . print)
+    listPotentialNewEffectsOf ing >>= mapM_ (sendIO . print)
   SuggestCombineWith ing -> do
     cover <- minimumPotentialEffectsCoverOf ing
     sendIO $ putStrLn "Cover clique:"
