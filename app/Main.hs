@@ -144,7 +144,8 @@ minimumPotentialEffectsCoverOf ing = do
   -- the smallest result.
   potentialEffs <- listPotentialNewEffectsOf ing
   ingsToConsider <- listIngredientsWithAnyOf potentialEffs
-  cliques <- bronKerbosch <$> getNonoverlapAdjacencyMap ingsToConsider
+  cliques <- bronKerbosch <$>
+    getNonoverlapAdjacencyMap potentialEffs ingsToConsider
 
   covers <- forM cliques $ \clique -> do
     cliqueEffs <- S.unions <$> mapM listEffectsOf (S.toList clique)
@@ -195,9 +196,10 @@ listMaximalCliques = bronKerbosch <$> do
 
 getNonoverlapAdjacencyMap
   :: Has (State AD.AlchemyData) sig m
-  => S.Set AD.IngredientName
+  => S.Set AD.EffectName
+  -> S.Set AD.IngredientName
   -> m (M.Map AD.IngredientName (S.Set AD.IngredientName))
-getNonoverlapAdjacencyMap ings = do
+getNonoverlapAdjacencyMap effsThatMatter ings = do
   overlaps <- gets AD.allKnownOverlaps
 
   -- TODO: Do this more efficiently!
@@ -206,7 +208,9 @@ getNonoverlapAdjacencyMap ings = do
   -- ingredients are adjacent iff they have an empty overlap.
   return $ run $ execState M.empty $
     forM_ overlaps $ \((ing1, ing2), effs) ->
-      when (S.member ing1 ings && S.member ing2 ings && S.null effs) $ do
+      when (S.member ing1 ings &&
+            S.member ing2 ings &&
+            effs `S.isSubsetOf` effsThatMatter) $ do
         modify $ multiMapInsert ing1 ing2
         modify $ multiMapInsert ing2 ing1
 
