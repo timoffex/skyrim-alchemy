@@ -8,6 +8,8 @@
 import qualified AlchemyData                  as AD
 import           BronKerbosch
     ( bronKerbosch )
+import           Control.Arrow
+    ( (>>>) )
 import           Control.Carrier.Lift
     ( Has, runM )
 import           Control.Carrier.State.Strict
@@ -21,11 +23,11 @@ import           Control.Effect.State
 import           Control.Effect.Throw
     ( Throw, throwError )
 import           Control.Monad
-    ( forM, forever, void, when )
+    ( forM, forever, unless, void, when )
 import           Data.Foldable
-    ( forM_, minimumBy )
+    ( fold, forM_, maximumBy, minimumBy )
 import           Data.Function
-    ( on )
+    ( fix, on )
 import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
@@ -110,42 +112,67 @@ listPotentialEffectsOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
   -> m (S.Set AD.EffectName)
-listPotentialEffectsOf ing = do
-  allEffs <- listAllEffects
-  nonEffs <- listNonEffectsOf ing
-  return $ S.difference allEffs nonEffs
+listPotentialEffectsOf ing =
+  S.difference <$> listAllEffects <*> listNonEffectsOf ing
 
+listPotentialNewEffectsOf
+  :: Has (State AD.AlchemyData) sig m
+  => AD.IngredientName
+  -> m (S.Set AD.EffectName)
+listPotentialNewEffectsOf ing =
+  S.difference <$> listPotentialEffectsOf ing <*> listEffectsOf ing
 
+data EffectCover
+  = EffectCover
+    { coverClique  :: S.Set AD.IngredientName
+    , coverFilling :: S.Set AD.IngredientName }
+
+coverSize :: EffectCover -> Int
+coverSize c = S.size (coverClique c) + S.size (coverFilling c)
+
+-- | Approximates a minimum cover of the potential unknown effects on
+-- the ingredient.
 minimumPotentialEffectsCoverOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
-  -> m (S.Set AD.IngredientName)
+  -> m EffectCover
 minimumPotentialEffectsCoverOf ing = do
   -- Get the list of potential effects. Consider all ingredients that
   -- contain at least one of these effects. Use Bron-Kerbosch to list
   -- all maximal cliques of these ingredients. For each clique, fill
   -- in the missing effects using ingredients from the list. Return
   -- the smallest result.
-  potentialEffs <- listPotentialEffectsOf ing
+  potentialEffs <- listPotentialNewEffectsOf ing
   ingsToConsider <- listIngredientsWithAnyOf potentialEffs
   cliques <- bronKerbosch <$> getNonoverlapAdjacencyMap ingsToConsider
 
-  -- TODO: Don't need to construct a cover for every clique; can just
-  -- look for the best clique right away
   covers <- forM cliques $ \clique -> do
     cliqueEffs <- S.unions <$> mapM listEffectsOf (S.toList clique)
-    let missingEffs = S.difference potentialEffs cliqueEffs
+    let effsMissingFromClique = S.difference potentialEffs cliqueEffs
 
-    -- TODO: Try to pick ingredients that cover multiple missing
-    -- effects
-    extraIngs <- forM (S.toList missingEffs) $ \missingEff -> do
-      possibilities <- listIngredientsWith missingEff
-      -- Every effect has at least one known ingredient
-      let (i:_) = S.toList possibilities
-      return i
-    return $ S.union clique (S.fromList extraIngs)
+    extraIngs <- execState (S.empty :: S.Set AD.IngredientName) $ fix $ \loop -> do
+      ingsSoFar <- get
+      effsSoFar <- fold <$> mapM listEffectsOf (S.toList ingsSoFar)
+      let missingEffs = effsMissingFromClique `S.difference` effsSoFar
 
-  return $ minimumBy (compare `on` S.size) covers
+      unless (S.null missingEffs) $ do
+        ingsForMissingEffs <- listIngredientsWithAnyOf missingEffs
+
+        rankedIngs <- forM (S.toList ingsForMissingEffs) $ \ingToRank -> do
+          ingEffs <- listEffectsOf ingToRank
+          return (ingToRank, S.size $ S.intersection ingEffs missingEffs)
+
+        modify $ S.insert $
+          fst $ maximumBy (compare `on` snd) rankedIngs
+
+        loop
+
+
+    return $ EffectCover
+      { coverClique = clique
+      , coverFilling = extraIngs }
+
+  return $ minimumBy (compare `on` coverSize) covers
 
 
 listMaximalCliques
@@ -191,11 +218,10 @@ tryLearnOverlap
   -> AD.IngredientName
   -> S.Set AD.EffectName
   -> m ()
-tryLearnOverlap ing1 ing2 effs = do
-  alch <- get
-  case AD.learnOverlap ing1 ing2 effs alch of
-    Left err    -> throwError $ T.pack $ show err
-    Right alch' -> put alch'
+tryLearnOverlap ing1 ing2 effs =
+  get >>= (AD.learnOverlap ing1 ing2 effs >>> \case
+    Left err   -> throwError $ T.pack $ show err
+    Right alch -> put alch)
 
 
 --------------------------------------------------------------------------------
@@ -427,8 +453,14 @@ runCommand = \case
   ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
   ListPotentialEffectsOf ing ->
     listPotentialEffectsOf ing >>= mapM_ (sendIO . print)
-  SuggestCombineWith ing ->
-    minimumPotentialEffectsCoverOf ing >>= mapM_ (sendIO . print)
+  SuggestCombineWith ing -> do
+    cover <- minimumPotentialEffectsCoverOf ing
+    sendIO $ putStrLn "Cover clique:"
+    forM_ (coverClique cover) $ \eff ->
+      sendIO $ putStrLn $ "  " ++ show eff
+    sendIO $ putStrLn "Cover filling:"
+    forM_ (coverFilling cover) $ \eff ->
+      sendIO $ putStrLn $ "  " ++ show eff
   ListMaximalCliques   -> do
     cliques <- listMaximalCliques
     forM_ cliques $ \clique -> do
