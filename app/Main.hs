@@ -21,9 +21,11 @@ import           Control.Effect.State
 import           Control.Effect.Throw
     ( Throw, throwError )
 import           Control.Monad
-    ( forever, void, when )
+    ( forM, forever, void, when )
 import           Data.Foldable
-    ( forM_ )
+    ( forM_, minimumBy )
+import           Data.Function
+    ( on )
 import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
@@ -79,6 +81,19 @@ listAllIngredients
   => m (S.Set AD.IngredientName)
 listAllIngredients = gets AD.allKnownIngredients
 
+
+listIngredientsWith
+  :: Has (State AD.AlchemyData) sig m
+  => AD.EffectName
+  -> m (S.Set AD.IngredientName)
+listIngredientsWith = listIngredientsWithAnyOf . S.singleton
+
+listIngredientsWithAnyOf
+  :: Has (State AD.AlchemyData) sig m
+  => S.Set AD.EffectName
+  -> m (S.Set AD.IngredientName)
+listIngredientsWithAnyOf = gets . AD.ingredientsWithAnyOf
+
 listEffectsOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
@@ -100,6 +115,39 @@ listPotentialEffectsOf ing = do
   nonEffs <- listNonEffectsOf ing
   return $ S.difference allEffs nonEffs
 
+
+minimumPotentialEffectsCoverOf
+  :: Has (State AD.AlchemyData) sig m
+  => AD.IngredientName
+  -> m (S.Set AD.IngredientName)
+minimumPotentialEffectsCoverOf ing = do
+  -- Get the list of potential effects. Consider all ingredients that
+  -- contain at least one of these effects. Use Bron-Kerbosch to list
+  -- all maximal cliques of these ingredients. For each clique, fill
+  -- in the missing effects using ingredients from the list. Return
+  -- the smallest result.
+  potentialEffs <- listPotentialEffectsOf ing
+  ingsToConsider <- listIngredientsWithAnyOf potentialEffs
+  cliques <- bronKerbosch <$> getNonoverlapAdjacencyMap ingsToConsider
+
+  -- TODO: Don't need to construct a cover for every clique; can just
+  -- look for the best clique right away
+  covers <- forM cliques $ \clique -> do
+    cliqueEffs <- S.unions <$> mapM listEffectsOf (S.toList clique)
+    let missingEffs = S.difference potentialEffs cliqueEffs
+
+    -- TODO: Try to pick ingredients that cover multiple missing
+    -- effects
+    extraIngs <- forM (S.toList missingEffs) $ \missingEff -> do
+      possibilities <- listIngredientsWith missingEff
+      -- Every effect has at least one known ingredient
+      let (i:_) = S.toList possibilities
+      return i
+    return $ S.union clique (S.fromList extraIngs)
+
+  return $ minimumBy (compare `on` S.size) covers
+
+
 listMaximalCliques
   :: Has (State AD.AlchemyData) sig m
   => m [S.Set AD.IngredientName]
@@ -108,6 +156,8 @@ listMaximalCliques = bronKerbosch <$> do
 
   let overlaps = AD.allKnownOverlaps alch
 
+  -- TODO: Share code with getNonoverlapAdjacencyMap
+
   -- Construct an adjacency map from the overlaps where two
   -- ingredients are adjacent iff they have an empty overlap.
   return $ run $ execState M.empty $
@@ -115,6 +165,24 @@ listMaximalCliques = bronKerbosch <$> do
       when (S.null effs) $ do
         modify $ multiMapInsert ing1 ing2
         modify $ multiMapInsert ing2 ing1
+
+getNonoverlapAdjacencyMap
+  :: Has (State AD.AlchemyData) sig m
+  => S.Set AD.IngredientName
+  -> m (M.Map AD.IngredientName (S.Set AD.IngredientName))
+getNonoverlapAdjacencyMap ings = do
+  overlaps <- gets AD.allKnownOverlaps
+
+  -- TODO: Do this more efficiently!
+
+  -- Construct an adjacency map from the overlaps where two
+  -- ingredients are adjacent iff they have an empty overlap.
+  return $ run $ execState M.empty $
+    forM_ overlaps $ \((ing1, ing2), effs) ->
+      when (S.member ing1 ings && S.member ing2 ings && S.null effs) $ do
+        modify $ multiMapInsert ing1 ing2
+        modify $ multiMapInsert ing2 ing1
+
 
 tryLearnOverlap
   :: ( Has (State AD.AlchemyData) sig m
@@ -263,6 +331,7 @@ data Command
   | ListEffectsOf AD.IngredientName
   | ListNonEffectsOf AD.IngredientName
   | ListPotentialEffectsOf AD.IngredientName
+  | SuggestCombineWith AD.IngredientName
   | ListIngredients
   | ListMaximalCliques
   | Exit
@@ -290,6 +359,7 @@ commandDef = MP.choice
   , listEffectsOfCommand
   , listNonEffectsOfCommand
   , listPotentialEffectsOfCommand
+  , suggestCombineWithCommand
   , listEffectsCommand
   , listIngredientsCommand
   , listMaximalCliquesCommand
@@ -328,6 +398,11 @@ listPotentialEffectsOfCommand = do
   void (symbol "potential effects" >> MP.optional (symbol "of"))
   ListPotentialEffectsOf <$> ingredientName
 
+suggestCombineWithCommand :: Parser Command
+suggestCombineWithCommand = do
+  void (symbol "suggestions" >> MP.optional (symbol "for"))
+  SuggestCombineWith <$> ingredientName
+
 listMaximalCliquesCommand :: Parser Command
 listMaximalCliquesCommand =
   symbol "cliques" >> MP.eof >> return ListMaximalCliques
@@ -352,6 +427,8 @@ runCommand = \case
   ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
   ListPotentialEffectsOf ing ->
     listPotentialEffectsOf ing >>= mapM_ (sendIO . print)
+  SuggestCombineWith ing ->
+    minimumPotentialEffectsCoverOf ing >>= mapM_ (sendIO . print)
   ListMaximalCliques   -> do
     cliques <- listMaximalCliques
     forM_ cliques $ \clique -> do

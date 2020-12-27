@@ -24,6 +24,8 @@ module AlchemyData
   , nonEffectsOf, nonEffectsOfIngredientIn
   , ingredientsNotOverlappingWith
   , overlapBetween
+  , ingredientsWith
+  , ingredientsWithAnyOf
   , InconsistentOverlap
   ) where
 
@@ -40,6 +42,7 @@ import           Control.Lens
     , view
     , (%=)
     , (&)
+    , (<&>)
     , (^.)
     )
 import           Control.Monad
@@ -136,6 +139,14 @@ nonEffectsOf ingName = S.fromList . toListOf
 
 nonEffectsOfIngredientIn :: AlchemyData -> IngredientName -> S.Set EffectName
 nonEffectsOfIngredientIn = flip nonEffectsOf
+
+
+ingredientsWith :: EffectName -> AlchemyData -> S.Set IngredientName
+ingredientsWith = ingredientsWithAnyOf . S.singleton
+
+ingredientsWithAnyOf :: S.Set EffectName -> AlchemyData -> S.Set IngredientName
+ingredientsWithAnyOf effs alchemyData =
+  S.unions (S.toList effs <&> \eff -> alchemyData^.positives.ix eff)
 
 
 -- | Gets all ingredients known to not overlap with the given
