@@ -262,11 +262,14 @@ ingredientFile = do
 
   let alch = run .
              runThrow @AD.InconsistentOverlap .
+             runThrow @AD.InconsistentEffect .
              execState AD.emptyAlchemyData $ do
         forM_ ings $ \(IngredientDef ingName effs) -> do
           modify $ AD.learnIngredient ingName
-          forM_ effs $ \eff ->
-            modify $ AD.learnIngredientEffect ingName eff
+          forM_ effs $ \eff -> do
+            alch0 <- get
+            alch1 <- liftEither $ AD.learnIngredientEffect ingName eff alch0
+            put alch1
 
         forM_ overlaps $ \(OverlapDef ing1 ing2 effs) -> do
           alch0 <- get
@@ -274,8 +277,9 @@ ingredientFile = do
           put alch1
 
   case alch of
-    Left err      -> fail $ show err
-    Right success -> return success
+    Left err              -> fail $ show err
+    Right (Left err)      -> fail $ show err
+    Right (Right success) -> return success
 
 
 data IngredientDef

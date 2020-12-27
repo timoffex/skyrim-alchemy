@@ -3,7 +3,10 @@ module PairMap
   -- * Construction
   , empty
   , insertPair
+
+  -- * Modification
   , deletePair
+  , delete
   , adjustPair
   , adjust
 
@@ -56,6 +59,18 @@ deletePair k1 k2 pm =
      , greater = M.update (nothingIfEmpty . M.delete lk) gk (greater pm)
      }
 
+delete :: Ord k => k -> PairMap k a -> PairMap k a
+delete k pm =
+  PairMap
+  { lesser = M.filter (not . M.null) $
+      M.map (M.delete k) $
+      M.delete k $
+      lesser pm
+  , greater = M.filter (not . M.null) $
+      M.map (M.delete k) $
+      M.delete k $
+      greater pm
+  }
 
 adjustPair :: Ord k => (a -> a) -> k -> k -> PairMap k a -> PairMap k a
 adjustPair f k1 k2 pm =
