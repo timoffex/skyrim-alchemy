@@ -8,20 +8,20 @@
 import qualified AlchemyData                  as AD
 import           BronKerbosch
     ( bronKerbosch )
-import           Control.Arrow
-    ( (>>>) )
+import           Control.Carrier.Error.Either
+    ( runError )
 import           Control.Carrier.Lift
     ( Has, runM )
 import           Control.Carrier.State.Strict
     ( evalState, execState, run )
-import           Control.Carrier.Throw.Either
-    ( liftEither, runThrow )
+import           Control.Effect.Error
+    ( Error, throwError )
 import           Control.Effect.Lift
     ( Lift, sendIO )
 import           Control.Effect.State
-    ( State, get, gets, modify, put )
-import           Control.Effect.Throw
-    ( Throw, throwError )
+    ( State, get, gets, modify )
+import           Control.Exception
+    ( SomeException, catch )
 import           Control.Monad
     ( forM, forever, unless, void, when )
 import           Data.Foldable
@@ -51,7 +51,8 @@ main = do
   -- large files without loading them completely into memory. I
   -- haven't benchmarked this, and it's 100% a premature optimization,
   -- but it makes me happy.
-  inputFileContents <- LT.pack <$> readFile inputFile
+  inputFileContents <- LT.pack <$>
+    catch @SomeException (readFile inputFile) (return . const "")
   case MP.parse ingredientFile inputFile inputFileContents of
     Left bundle       -> putStr (MP.errorBundlePretty bundle)
     Right initialData -> do
@@ -217,15 +218,16 @@ getNonoverlapAdjacencyMap effsThatMatter ings = do
 
 tryLearnOverlap
   :: ( Has (State AD.AlchemyData) sig m
-     , Has (Throw T.Text) sig m )
+     , Has (Error T.Text) sig m )
   => AD.IngredientName
   -> AD.IngredientName
   -> S.Set AD.EffectName
   -> m ()
 tryLearnOverlap ing1 ing2 effs =
-  get >>= (AD.learnOverlap ing1 ing2 effs >>> \case
-    Left err   -> throwError $ T.pack $ show err
-    Right alch -> put alch)
+  runError @AD.InconsistentOverlap (AD.learnOverlap ing1 ing2 effs) >>= \case
+    Left err -> throwError $ T.pack $ show err
+    Right () -> return ()
+
 
 
 --------------------------------------------------------------------------------
@@ -261,20 +263,15 @@ ingredientFile = do
   MP.eof
 
   let alch = run .
-             runThrow @AD.InconsistentOverlap .
-             runThrow @AD.InconsistentEffect .
+             runError @AD.InconsistentOverlap .
+             runError @AD.InconsistentEffect .
              execState AD.emptyAlchemyData $ do
         forM_ ings $ \(IngredientDef ingName effs) -> do
-          modify $ AD.learnIngredient ingName
-          forM_ effs $ \eff -> do
-            alch0 <- get
-            alch1 <- liftEither $ AD.learnIngredientEffect ingName eff alch0
-            put alch1
+          AD.learnIngredient ingName
+          mapM_ (AD.learnIngredientEffect ingName) effs
 
         forM_ overlaps $ \(OverlapDef ing1 ing2 effs) -> do
-          alch0 <- get
-          alch1 <- liftEither $ AD.learnOverlap ing1 ing2 effs alch0
-          put alch1
+          AD.learnOverlap ing1 ing2 effs
 
   case alch of
     Left err              -> fail $ show err
@@ -476,7 +473,7 @@ runCommand = \case
       mapM_ (sendIO . print) clique
       sendIO $ putStrLn ""
   LearnOverlap ing1 ing2 effs ->
-    runThrow (tryLearnOverlap ing1 ing2 effs) >>= \case
+    runError (tryLearnOverlap ing1 ing2 effs) >>= \case
       Left err -> sendIO $ putStrLn $ "Error: " ++ T.unpack err
       Right () -> return ()
 
