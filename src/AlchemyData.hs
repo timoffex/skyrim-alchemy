@@ -57,7 +57,7 @@ import           Control.Lens
     , asIndex
     , at
     , filtered
-    , makeFields
+    , makeLenses
     , traversed
     , view
     , (&)
@@ -109,30 +109,30 @@ effectName = EffectName . T.toLower
 
 data AlchemyData
   = AlchemyData
-    { _alchemyDataPositives
+    { _positives
       :: M.Map EffectName (S.Set IngredientName)
     -- ^ Multimap from effects to ingredients containing them.
 
-    , _alchemyDataNegativesNonComplete
+    , _negativesNonComplete
       :: M.Map EffectName (S.Set IngredientName)
     -- ^ Multimap from effects to incomplete ingredients known to not
     -- contain them.
 
-    , _alchemyDataAllIngredients
+    , _allIngredients
       :: M.Map IngredientName (S.Set EffectName)
     -- ^ Map from ingredients to their known effects.
 
-    , _alchemyDataCompletedIngredients
+    , _completedIngredients
       :: S.Set IngredientName
     -- ^ The set of all ingredients with all 4 effects known.
 
-    , _alchemyDataFullOverlapNonComplete
+    , _fullOverlapNonComplete
       :: PM.PairMap IngredientName (S.Set EffectName)
     -- ^ A map from pairs of incomplete ingredients to the set of
     -- ingredients they have in common, as gleaned from actually
     -- combining them.
     }
-$( makeFields ''AlchemyData )
+$( makeLenses ''AlchemyData )
 
 
 completedIngredientsNotContaining
@@ -296,7 +296,7 @@ learnIngredient
   => IngredientName
   -> m ()
 learnIngredient ing =
-  allIngredients @AlchemyData . at ing %= \case
+  allIngredients . at ing %= \case
     Nothing -> Just S.empty
     Just s  -> Just s
 
@@ -338,11 +338,11 @@ learnIngredientEffect ing eff =
     ----------------------------------------------------------------------------
     do
       overlapsWithIng <-
-        gets $ PM.lookup ing . view @AlchemyData fullOverlapNonComplete
+        gets $ PM.lookup ing . view fullOverlapNonComplete
 
       forM_ (M.assocs overlapsWithIng) $ \(otherIng, overlap) ->
         when (S.notMember eff overlap) $
-          negativesNonComplete @AlchemyData %= multiMapInsert eff otherIng
+          negativesNonComplete %= multiMapInsert eff otherIng
 
 
     ----------------------------------------------------------------------------
@@ -353,19 +353,19 @@ learnIngredientEffect ing eff =
       return $ S.size newIngEffs == 4
     when isNewlyComplete $ do
       -- Add completed ingredient to completed set
-      completedIngredients @AlchemyData %= S.insert ing
+      completedIngredients %= S.insert ing
 
       -- Remove completed ingredient from maps that should not have
       -- completed ingredients
-      fullOverlapNonComplete @AlchemyData %= PM.delete ing
-      negativesNonComplete @AlchemyData
+      fullOverlapNonComplete %= PM.delete ing
+      negativesNonComplete
         . traversed %= S.delete ing
 
     ----------------------------------------------------------------------------
     -- Update positives & allIngredients maps
     ----------------------------------------------------------------------------
-    positives @AlchemyData %= multiMapInsert eff ing
-    allIngredients @AlchemyData %= multiMapInsert ing eff
+    positives %= multiMapInsert eff ing
+    allIngredients %= multiMapInsert ing eff
 
 
 data InconsistentOverlap
@@ -446,7 +446,7 @@ learnOverlap ing1 ing2 effs =
           otherIngEffs <- gets $ effectsOf otherIng
           forM_ otherIngEffs $ \eff -> do
             when (S.notMember eff effs) $
-              negativesNonComplete @AlchemyData %= multiMapInsert eff incompleteIng
+              negativesNonComplete %= multiMapInsert eff incompleteIng
 
     isCompleted1 <- gets (isCompleted ing1)
     isCompleted2 <- gets (isCompleted ing2)
@@ -457,7 +457,7 @@ learnOverlap ing1 ing2 effs =
 
     -- Update overlap map if both ingredients are not completed
     when (not isCompleted1 && not isCompleted2) $
-      fullOverlapNonComplete @AlchemyData %= PM.insertPair ing1 ing2 effs
+      fullOverlapNonComplete %= PM.insertPair ing1 ing2 effs
 
 
 
