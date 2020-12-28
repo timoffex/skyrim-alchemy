@@ -40,7 +40,9 @@ module AlchemyData
 import           Control.Algebra
     ( Has )
 import           Control.Carrier.Error.Either
-    ( runError, throwError )
+    ( throwError )
+import           Control.Carrier.Error.Extra
+    ( rethrowing )
 import           Control.Carrier.State.Strict
     ( gets )
 import           Control.Effect.Error
@@ -66,7 +68,7 @@ import           Control.Lens
 import           Control.Monad
     ( forM_, unless, when )
 import           Control.Monad.Extra
-    ( unlessM, whenM, (>=>) )
+    ( unlessM, whenM )
 import           Data.Coerce
     ( coerce )
 import           Data.Foldable
@@ -431,12 +433,10 @@ learnOverlap ing1 ing2 effs =
     mapM_ learnIngredient [ing1, ing2]
 
     -- Learn the effects on both ingredients
-    let mapError = runError @InconsistentEffect >=> \case
-          Left err  -> throwError $ InconsistentOverlapBadEffects err
-          Right res -> return res
-    forM_ effs $ \eff -> mapError $ do
-      learnIngredientEffect ing1 eff
-      learnIngredientEffect ing2 eff
+    rethrowing InconsistentOverlapBadEffects $
+      forM_ effs $ \eff -> do
+        learnIngredientEffect ing1 eff
+        learnIngredientEffect ing2 eff
 
 
     ----------------------------------------------------------------------------

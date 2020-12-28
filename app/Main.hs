@@ -10,12 +10,14 @@ import           BronKerbosch
     ( bronKerbosch )
 import           Control.Carrier.Error.Either
     ( runError )
+import           Control.Carrier.Error.Extra
+    ( catching, rethrowing )
 import           Control.Carrier.Lift
     ( Has, runM )
 import           Control.Carrier.State.Strict
     ( evalState, execState, run )
 import           Control.Effect.Error
-    ( Error, throwError )
+    ( Error )
 import           Control.Effect.Lift
     ( Lift, sendIO )
 import           Control.Effect.State
@@ -224,9 +226,8 @@ tryLearnOverlap
   -> S.Set AD.EffectName
   -> m ()
 tryLearnOverlap ing1 ing2 effs =
-  runError @AD.InconsistentOverlap (AD.learnOverlap ing1 ing2 effs) >>= \case
-    Left err -> throwError $ T.pack $ show err
-    Right () -> return ()
+  rethrowing @AD.InconsistentOverlap (T.pack . show) $
+  AD.learnOverlap ing1 ing2 effs
 
 
 
@@ -473,9 +474,8 @@ runCommand = \case
       mapM_ (sendIO . print) clique
       sendIO $ putStrLn ""
   LearnOverlap ing1 ing2 effs ->
-    runError (tryLearnOverlap ing1 ing2 effs) >>= \case
-      Left err -> sendIO $ putStrLn $ "Error: " ++ T.unpack err
-      Right () -> return ()
+    catching (tryLearnOverlap ing1 ing2 effs) $ \err ->
+      sendIO $ putStrLn $ "Error: " ++ T.unpack err
 
 
 

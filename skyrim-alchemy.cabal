@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f780e27197af5089b59ee1d270b59f35a0d3b3d953e02490f6af877c3bc5d3de
+-- hash: 09b6c199c9e8c013f4505509f2931e0323cf82ff6f90261bc0d9fa69459fc1b1
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -16,6 +16,7 @@ library
   exposed-modules:
       AlchemyData
       BronKerbosch
+      Control.Carrier.Error.Extra
       PairMap
   other-modules:
       Paths_skyrim_alchemy
