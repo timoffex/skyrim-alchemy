@@ -132,8 +132,8 @@ interacting with this data structure.
 
 Usually 400+ line files offend my sensibilities, but I learned that
 trying to come up with a file organization structure before writing
-any code is a fool's errand. And there is a cost to breaking code into
-many files because switching between files is surprisingly disruptive.
+any code is a fool's errand. And there is a cost to switching between
+files during development.
 
 So I started with all of my code in `Main.hs` and later factored out
 `AlchemyData` into its own file. I don't think `AlchemyData` should be
@@ -162,7 +162,7 @@ understanding Haskell code is hard. Anyone can read some Python and
 glean some understanding of what it's doing. I think this Haskell code
 is easy to read:
 
-```
+```hs
 positives %= multiMapInsert effect ingredient
 ```
 
@@ -172,7 +172,7 @@ confused upon seeing that the signature of `multiMapInsert` takes
 three arguments even though it is only applied to two here. The type
 signature of `%=` might look helpful:
 
-```
+```hs
 (%=) :: MonadState s m => ASetter s s a b -> (a -> b) -> m ()
 ```
 
@@ -185,7 +185,7 @@ type ASetter s t a b = (a -> Identity b) -> s -> Identity t
 This code is also perfectly reasonable, but even more baffling to
 someone unfamiliar with `lens`:
 
-```
+```hs
 negativesNonComplete . traversed %= S.delete ingredient
 ```
 
@@ -197,6 +197,49 @@ itself---it's a lens that lets you get and set the
 `_negativesNonComplete` field on an `AlchemyData` value, and that
 field is a map from effect names to sets of ingredients (the
 `AlchemyData` value is implicit here))).
+
+A few more examples:
+
+```hs
+-- Lists all effects and prints them on separate lines
+listAllEffects >>= mapM_ (sendIO . print)
+
+-- A parser that outputs the ListEffects command if the user
+-- typed the "effects" keyword
+listEffectsCommand =
+  symbol "effects" >> MP.eof >> return ListEffects
+  
+-- A parser that outputs the LearnIngredientEffect command if
+-- the user typed
+-- "learn effect <ingredient name>: <effect name> [, <effect name>]*"
+learnIngredientEffectCommand = do
+  void (symbol "learn effect")
+  ingName <- ingredientName
+  void (symbol ":")
+  effs <- effectName `MP.sepEndBy1` symbol ","
+  return $ LearnIngredientEffect ingName (S.fromList effs)
+  
+  
+-- A part of a larger computation that finds ingredients to
+-- fill in missing effects, while prioritizing ingredients that
+-- cover multiple such effects
+extraIngs <- execState (S.empty @AD.IngredientName) $ fix $ \loop -> do
+  ingsSoFar <- get
+  effsSoFar <- fold <$> mapM listEffectsOf (S.toList ingsSoFar)
+  let missingEffs = effsMissingFromClique `S.difference` effsSoFar
+
+  unless (S.null missingEffs) $ do
+	ingsForMissingEffs <- listIngredientsWithAnyOf missingEffs
+
+	rankedIngs <- forM (S.toList ingsForMissingEffs) $ \ingToRank -> do
+	  ingEffs <- listEffectsOf ingToRank
+	  return (ingToRank, S.size $ S.intersection ingEffs missingEffs)
+
+	modify $ S.insert $
+	  fst $ maximumBy (compare `on` snd) rankedIngs
+
+	loop
+```
 
 
 I think my Haskell code is readable and well-written, and I have an
