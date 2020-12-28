@@ -99,6 +99,16 @@ listIngredientsWithAnyOf
   -> m (S.Set AD.IngredientName)
 listIngredientsWithAnyOf = gets . AD.ingredientsWithAnyOf
 
+listIngredientsWithAllOf
+  :: Has (State AD.AlchemyData) sig m
+  => S.Set AD.EffectName
+  -> m (S.Set AD.IngredientName)
+listIngredientsWithAllOf effs = do
+  ingsPerEff <- mapM listIngredientsWith (S.toList effs)
+  if null ingsPerEff
+    then return S.empty
+    else return $ foldl1 S.intersection ingsPerEff
+
 listEffectsOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
@@ -154,7 +164,7 @@ minimumPotentialEffectsCoverOf ing = do
     cliqueEffs <- S.unions <$> mapM listEffectsOf (S.toList clique)
     let effsMissingFromClique = S.difference potentialEffs cliqueEffs
 
-    extraIngs <- execState (S.empty :: S.Set AD.IngredientName) $ fix $ \loop -> do
+    extraIngs <- execState (S.empty @AD.IngredientName) $ fix $ \loop -> do
       ingsSoFar <- get
       effsSoFar <- fold <$> mapM listEffectsOf (S.toList ingsSoFar)
       let missingEffs = effsMissingFromClique `S.difference` effsSoFar
@@ -229,6 +239,16 @@ tryLearnOverlap ing1 ing2 effs =
   rethrowing @AD.InconsistentOverlap (T.pack . show) $
   AD.learnOverlap ing1 ing2 effs
 
+
+tryLearnIngredientEffect
+  :: ( Has (State AD.AlchemyData) sig m
+     , Has (Error T.Text) sig m )
+  => AD.IngredientName
+  -> AD.EffectName
+  -> m ()
+tryLearnIngredientEffect ing eff =
+  rethrowing @AD.InconsistentEffect (T.pack . show) $
+  AD.learnIngredientEffect ing eff
 
 
 --------------------------------------------------------------------------------
@@ -359,12 +379,14 @@ serializeAlchemyData alchemyData = run . execState "" $ do
 
 data Command
   = LearnOverlap AD.IngredientName AD.IngredientName (S.Set AD.EffectName)
+  | LearnIngredientEffect AD.IngredientName (S.Set AD.EffectName)
   | ListEffects
   | ListEffectsOf AD.IngredientName
   | ListNonEffectsOf AD.IngredientName
   | ListPotentialEffectsOf AD.IngredientName
   | SuggestCombineWith AD.IngredientName
   | ListIngredients
+  | ListIngredientsWithAllOf (S.Set AD.EffectName)
   | ListMaximalCliques
   | Exit
 
@@ -388,11 +410,13 @@ tryReadCommand = do
 commandDef :: Parser Command
 commandDef = MP.choice
   [ learnOverlapCommand
+  , learnIngredientEffectCommand
   , listEffectsOfCommand
   , listNonEffectsOfCommand
   , listPotentialEffectsOfCommand
   , suggestCombineWithCommand
   , listEffectsCommand
+  , listIngredientsWithAllOfCommand
   , listIngredientsCommand
   , listMaximalCliquesCommand
   , exitCommand ]
@@ -407,6 +431,14 @@ learnOverlapCommand = do
   effs <- effectName `MP.sepEndBy` symbol ","
   return $ LearnOverlap ingName1 ingName2 (S.fromList effs)
 
+learnIngredientEffectCommand :: Parser Command
+learnIngredientEffectCommand = do
+  void (symbol "learn effect")
+  ingName <- ingredientName
+  void (symbol ":")
+  effs <- effectName `MP.sepEndBy1` symbol ","
+  return $ LearnIngredientEffect ingName (S.fromList effs)
+
 listEffectsCommand :: Parser Command
 listEffectsCommand =
   symbol "effects" >> MP.eof >> return ListEffects
@@ -414,6 +446,12 @@ listEffectsCommand =
 listIngredientsCommand :: Parser Command
 listIngredientsCommand =
   symbol "ingredients" >> MP.eof >> return ListIngredients
+
+listIngredientsWithAllOfCommand :: Parser Command
+listIngredientsWithAllOfCommand = do
+  void (symbol "ingredients with")
+  effs <- effectName `MP.sepEndBy1` symbol ","
+  return $ ListIngredientsWithAllOf (S.fromList effs)
 
 listEffectsOfCommand :: Parser Command
 listEffectsOfCommand = do
@@ -457,6 +495,8 @@ runCommand = \case
   ListEffectsOf ing    -> listEffectsOf ing >>= mapM_ (sendIO . print)
   ListNonEffectsOf ing -> listNonEffectsOf ing >>= mapM_ (sendIO . print)
   ListIngredients      -> listAllIngredients >>= mapM_ (sendIO . print)
+  ListIngredientsWithAllOf effs ->
+    listIngredientsWithAllOf effs >>= mapM_ (sendIO . print)
   ListPotentialEffectsOf ing ->
     listPotentialNewEffectsOf ing >>= mapM_ (sendIO . print)
   SuggestCombineWith ing -> do
@@ -475,6 +515,9 @@ runCommand = \case
       sendIO $ putStrLn ""
   LearnOverlap ing1 ing2 effs ->
     catching (tryLearnOverlap ing1 ing2 effs) $ \err ->
+      sendIO $ putStrLn $ "Error: " ++ T.unpack err
+  LearnIngredientEffect ing effs ->
+    catching (mapM_ (tryLearnIngredientEffect ing) effs) $ \err ->
       sendIO $ putStrLn $ "Error: " ++ T.unpack err
 
 
