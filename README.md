@@ -299,8 +299,7 @@ hard to write---until you know enough and it becomes pleasant and
   
   ```hs
   -- alchemyData^.negativesNonComplete is Map EffectName (Set IngredientName)
-  -- This code finds all EffectNames whose set of IngredientNames doesn't
-  -- include 'ing'
+  -- This code finds all EffectNames whose set of IngredientNames includes 'ing'
   alchemyData^..negativesNonComplete
   . itraversed
   . filtered (S.member ing)
