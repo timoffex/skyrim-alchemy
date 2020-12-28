@@ -248,3 +248,68 @@ put a lot of effort into that. But it took a long time and a lot of
 learning to get to this point. So Haskell is both hard to read and
 hard to write---until you know enough and it becomes pleasant and
 (relatively) easy.
+
+## Haskell tricks I learned while writing this
+
+- You can nest `do` blocks to limit the scopes of bindings:
+
+  ```hs
+  do
+    checkSomething
+
+    do
+      x <- get
+      doSomethingWith x
+      doSomethingElse x y
+    
+    -- x is not in scope, so there's no chance I'll accidentally
+    -- use it when I should be using 'get'
+    doOtherThings
+  ```
+
+  This is like using extra braces in languages like C++ or Java.
+  
+- When possible, use `makeLenses` instead of `makeFields` to avoid
+  type ambiguity problems
+  
+- Your code is easier to read if you use one-liner guards and extract
+  long expressions into a shared `where` block (using the extra space
+  you have to give the expressions expressive names)
+  
+  ```hs
+  ingredientsNotOverlappingWith ing alchemyData
+  | isIngCompleted = ingsNotContainingIngEffs
+  | otherwise      = ingsNotOverlappingIncompleteIng
+  where
+    isIngCompleted = isCompleted ing alchemyData
+
+    ingsNotContainingIngEffs =
+      foldl1' S.intersection
+      [ ingredientsNotContaining eff alchemyData
+      | eff <- S.toList $ effectsOf ing alchemyData ]
+      
+    ...
+  ```
+
+- Use `fold` from `Data.Foldable` to turn `Maybe (Set a)` into `Set a`
+  with an empty set for `Nothing`
+
+- Want to find all keys in a map whose values satisfy a predicate?
+  Use `itraversed` and `asIndex` from `lens`
+  
+  ```hs
+  -- alchemyData^.negativesNonComplete is Map EffectName (Set IngredientName)
+  -- This code finds all EffectNames whose set of IngredientNames doesn't
+  -- include 'ing'
+  alchemyData^..negativesNonComplete
+  . itraversed
+  . filtered (S.member ing)
+  . asIndex
+  ```
+  
+- Always use the `readline` package instead of `getLine` if you want
+  to be able to use backspaces. It also gives you Emacs bindings for
+  going through the command history (Ctrl-P, Ctrl-N)!
+  
+- Emacs-specific: use `C-u 8 0 -` to place an 80-character line of
+  dashes. Great for organizing a file.
