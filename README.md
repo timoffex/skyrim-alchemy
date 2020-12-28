@@ -229,16 +229,16 @@ extraIngs <- execState (S.empty @AD.IngredientName) $ fix $ \loop -> do
   let missingEffs = effsMissingFromClique `S.difference` effsSoFar
 
   unless (S.null missingEffs) $ do
-	ingsForMissingEffs <- listIngredientsWithAnyOf missingEffs
+    ingsForMissingEffs <- listIngredientsWithAnyOf missingEffs
 
-	rankedIngs <- forM (S.toList ingsForMissingEffs) $ \ingToRank -> do
-	  ingEffs <- listEffectsOf ingToRank
-	  return (ingToRank, S.size $ S.intersection ingEffs missingEffs)
+    rankedIngs <- forM (S.toList ingsForMissingEffs) $ \ingToRank -> do
+      ingEffs <- listEffectsOf ingToRank
+      return (ingToRank, S.size $ S.intersection ingEffs missingEffs)
 
-	modify $ S.insert $
-	  fst $ maximumBy (compare `on` snd) rankedIngs
+    modify $ S.insert $
+      fst $ maximumBy (compare `on` snd) rankedIngs
 
-	loop
+    loop
 ```
 
 
@@ -246,5 +246,5 @@ I think my Haskell code is readable and well-written, and I have an
 easy time orienting myself and understanding what the code is doing. I
 put a lot of effort into that. But it took a long time and a lot of
 learning to get to this point. So Haskell is both hard to read and
-hard to write---until you know enough for it to become relatively
-easy.
+hard to write---until you know enough and it becomes pleasant and
+(relatively) easy.
