@@ -145,6 +145,47 @@ modify those three pieces together, but the `AlchemyData`
 serialization and parsing can go into a separate file. Maybe I'll do
 that later (or maybe I already did and forgot to update this text).
 
+## How to run
+
+If you really want to try it out, just `stack run`. This will open a
+prompt where you can enter commands. If you enter a command wrong,
+`megaparsec` will tell you the problem and the valid possibilities.
+You can use this to figure out the available commands: just enter an
+empty command.
+
+Before every command, the program will save its current state of
+knowledge into `output.txt`. When you use `stack run`, the program
+will read from `output.txt` and restart where you left off.
+
+You can read the code in `Main.hs` to learn the details of the
+commands. Here is the gist:
+
+**Query commands**:
+
+- `ingredients` lists all ingredients
+- `effects` lists all effects
+- `ingredients with [<eff name>]+` lists all ingredients that have all
+  of the given effects
+- `effects of <ing name>` lists all effects on an ingredient
+- `noneffects of <ing name>` lists all effects that an ingredient is known not to
+  have
+- `potential effects of <ing name>` lists all effects that an ingredient could
+  still have
+- `suggestions for <ing name>` suggests a list of ingredients to try
+  combining with your ingredient to learn new effects. The output
+  shows two sets of ingredients: the first set is mutually disjoint,
+  and the second set is just there to cover the rest of the potential
+  effects on your ingredient that aren't covered by the first set.
+
+**Update commands**:
+
+- `overlap <ing name>, <ing name>: [<eff name>]*` records the result
+  of combining two ingredients (you don't have to use `learn` first)
+- `learn effect <ing name>: [<eff name>]*` records effects on an
+  ingredient
+
+Ingredient and effect names are not case sensitive. 
+
 ## Haskell thoughts, opinions and lessons
 
 One of the things I love about Haskell is how incredibly flexible it
