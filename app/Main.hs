@@ -34,6 +34,8 @@ import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
 import qualified Data.Text.Lazy               as LT
+import           Data.UPair
+    ( unpair )
 import           Data.Void
     ( Void )
 import           System.Console.Readline
@@ -202,8 +204,9 @@ listMaximalCliques = bronKerbosch <$> do
   -- Construct an adjacency map from the overlaps where two
   -- ingredients are adjacent iff they have an empty overlap.
   return $ run $ execState M.empty $
-    forM_ overlaps $ \((ing1, ing2), effs) ->
+    forM_ overlaps $ \(ingPair, effs) ->
       when (S.null effs) $ do
+        let (ing1, ing2) = unpair ingPair
         modify $ multiMapInsert ing1 ing2
         modify $ multiMapInsert ing2 ing1
 
@@ -220,7 +223,8 @@ getNonoverlapAdjacencyMap effsThatMatter ings = do
   -- Construct an adjacency map from the overlaps where two
   -- ingredients are adjacent iff they have an empty overlap.
   return $ run $ execState M.empty $
-    forM_ overlaps $ \((ing1, ing2), effs) ->
+    forM_ overlaps $ \(ingPair, effs) -> do
+      let (ing1, ing2) = unpair ingPair
       when (S.member ing1 ings &&
             S.member ing2 ings &&
             effs `S.isSubsetOf` effsThatMatter) $ do
@@ -361,7 +365,8 @@ serializeAlchemyData alchemyData = run . execState "" $ do
     newline
 
   -- Print all known overlaps
-  forM_ (AD.allKnownOverlaps alchemyData) $ \((ing1, ing2), effs) -> do
+  forM_ (AD.allKnownOverlaps alchemyData) $ \(ingPair, effs) -> do
+    let (ing1, ing2) = unpair ingPair
     append "!OVERLAP "
     append $ show ing1
     append ", "

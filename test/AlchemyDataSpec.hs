@@ -41,6 +41,8 @@ import           Data.Functor
     ( void )
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
+import           Data.UPair
+    ( pair )
 import           Test.Hspec
     ( HasCallStack, SpecWith, describe, it, shouldBe, shouldSatisfy )
 
@@ -99,12 +101,12 @@ spec = do
 
       mapM_ (learnIngredientEffect completedIng) completedEffs
       learnOverlap completedIng otherIng S.empty
-      gets allKnownOverlaps `shouldReturn` [((completedIng, otherIng), S.empty)]
+      gets allKnownOverlaps `shouldReturn` [(pair completedIng otherIng, S.empty)]
 
 
     it "includes overlaps with empty ingredients" $ runAlchemyData $ do
       learnOverlap nirnroot wheat S.empty
-      gets allKnownOverlaps `shouldReturn` [((nirnroot, wheat), S.empty)]
+      gets allKnownOverlaps `shouldReturn` [(pair nirnroot wheat, S.empty)]
 
 
   describe "learnIngredientEffect" $ do
@@ -136,7 +138,7 @@ spec = do
 
       mapM_ (learnIngredientEffect completedIng) completedEffs
       learnOverlap completedIng otherIng S.empty
-      gets allKnownOverlaps `shouldReturn` [((completedIng, otherIng), S.empty)]
+      gets allKnownOverlaps `shouldReturn` [(pair completedIng otherIng, S.empty)]
 
     it "can learn overlap that completes an ingredient" $ runAlchemyData $ do
       let
@@ -150,7 +152,7 @@ spec = do
       learnOverlap ing1 ing2 overlap
 
       gets (isCompleted ing1) `shouldReturn` True
-      gets allKnownOverlaps `shouldReturn` [((ing1, ing2), overlap)]
+      gets allKnownOverlaps `shouldReturn` [(pair ing1 ing2, overlap)]
 
     it "cannot learn overlap that contradicts the existing one" $
       runAlchemyData $ do

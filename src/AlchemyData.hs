@@ -70,6 +70,8 @@ import           Data.Maybe
     ( isJust )
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
+import           Data.UPair
+    ( UPair, pair )
 import qualified PairMap                      as PM
 
 
@@ -158,12 +160,12 @@ allKnownEffects = BR.rights . view ingHasEffRelation
 -- | Gets all known overlaps between pairs of ingredients.
 allKnownOverlaps
   :: AlchemyData
-  -> [((IngredientName, IngredientName), S.Set EffectName)]
+  -> [(UPair IngredientName, S.Set EffectName)]
 allKnownOverlaps alchemyData =
   PM.assocs (alchemyData^.fullOverlapNonComplete) ++
 
   -- Overlaps where one ingredient is completed
-  [ ((ing1, ing2), overlap)
+  [ (pair ing1 ing2, overlap)
   | ing1 <- S.toList (allCompletedIngredients alchemyData)
   , ing2 <- S.toList (allKnownIngredients alchemyData)
   , ing1 /= ing2
@@ -285,7 +287,7 @@ overlapBetween
 overlapBetween ing1 ing2 alchemyData
   | isCompleted1 = overlapWithCompleted ing1 ing2
   | isCompleted2 = overlapWithCompleted ing2 ing1
-  | otherwise = PM.lookupPair ing1 ing2 (alchemyData^.fullOverlapNonComplete)
+  | otherwise = PM.lookupPair (pair ing1 ing2) (alchemyData^.fullOverlapNonComplete)
   where
     isCompleted1 = isCompleted ing1 alchemyData
     isCompleted2 = isCompleted ing2 alchemyData
@@ -473,7 +475,7 @@ learnOverlap ing1 ing2 effs =
 
     -- Update overlap map if both ingredients are not completed
     when (not isCompleted1 && not isCompleted2) $
-      fullOverlapNonComplete %= PM.insertPair ing1 ing2 effs
+      fullOverlapNonComplete %= PM.insertPair (pair ing1 ing2) effs
 
 
 --------------------------------------------------------------------------------
