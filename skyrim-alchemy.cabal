@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 09b6c199c9e8c013f4505509f2931e0323cf82ff6f90261bc0d9fa69459fc1b1
+-- hash: 70fe1ec336649f843e104970b1a39834ea4769948ae8d91789fccfb491004fe5
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -15,6 +15,7 @@ build-type:     Simple
 library
   exposed-modules:
       AlchemyData
+      BinaryRelation
       BronKerbosch
       Control.Carrier.Error.Extra
       PairMap
@@ -32,6 +33,7 @@ library
     , fused-effects-th >=0.1.0.2
     , lens >=4.19.2
     , megaparsec
+    , multi-containers >=0.1.1
     , readline >=1.0.3.0
     , split >=0.2.3.3
     , text >=1.2.3.1
@@ -55,6 +57,7 @@ executable skyrim-alchemy-exe
     , fused-effects-th >=0.1.0.2
     , lens >=4.19.2
     , megaparsec
+    , multi-containers >=0.1.1
     , readline >=1.0.3.0
     , skyrim-alchemy
     , split >=0.2.3.3

@@ -16,6 +16,7 @@ dependencies:
 - megaparsec
 - readline >= 1.0.3.0
 - extra >= 1.7.9
+- multi-containers >= 0.1.1
 
 library:
   source-dirs: src
