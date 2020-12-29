@@ -25,9 +25,9 @@ bronKerbosch neighbors =
 bronKerboschImpl
   :: ( Ord a )
   => M.Map a (S.Set a)
-  -> S.Set a   -- ^ The @P@ set
-  -> S.Set a   -- ^ The @R@ set
-  -> S.Set a   -- ^ The @X@ set
+  -> S.Set a   -- ^ Returned cliques have some of these nodes.
+  -> S.Set a   -- ^ Returned cliques have all of these nodes.
+  -> S.Set a   -- ^ Returned cliques have none of these nodes.
   -> [S.Set a]
 bronKerboschImpl neighbors p r x
   | S.null p && S.null x = [r]
