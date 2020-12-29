@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 70fe1ec336649f843e104970b1a39834ea4769948ae8d91789fccfb491004fe5
+-- hash: 118d61d39fde5622e77db2c0af536458468a0e34136bd72c1857d17f1f398208
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -55,6 +55,35 @@ executable skyrim-alchemy-exe
     , fused-effects >=1.1.0.0
     , fused-effects-lens >=1.2.0.1
     , fused-effects-th >=0.1.0.2
+    , lens >=4.19.2
+    , megaparsec
+    , multi-containers >=0.1.1
+    , readline >=1.0.3.0
+    , skyrim-alchemy
+    , split >=0.2.3.3
+    , text >=1.2.3.1
+    , transformers >=0.5.6.2
+  default-language: Haskell2010
+
+test-suite skyrim-alchemy-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      AlchemyDataSpec
+      Paths_skyrim_alchemy
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      QuickCheck
+    , base ==4.12.0.0
+    , bytestring >=0.10.8.2
+    , containers >=0.6.0.1
+    , extra >=1.7.9
+    , fused-effects >=1.1.0.0
+    , fused-effects-lens >=1.2.0.1
+    , fused-effects-th >=0.1.0.2
+    , hspec
     , lens >=4.19.2
     , megaparsec
     , multi-containers >=0.1.1

@@ -12,6 +12,11 @@ cradle:
         cradle:
           stack:
             component: "skyrim-alchemy:lib"
+    - path: "./test"
+      config:
+        cradle:
+          stack:
+            component: "skyrim-alchemy:test:skyrim-alchemy-test"
 
 dependencies:
   - package.yaml

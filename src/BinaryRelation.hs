@@ -95,7 +95,7 @@ check
   -> right
   -> BinaryRelation left right
   -> Bool
-check l r = not . S.member r . SM.lookup l . _leftToRight
+check l r = S.member r . SM.lookup l . _leftToRight
 
 -- | Gets all values related to the left value.
 byLeft

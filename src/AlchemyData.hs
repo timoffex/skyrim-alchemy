@@ -58,7 +58,7 @@ import           Control.Lens
 import           Control.Monad
     ( forM_, unless, when )
 import           Control.Monad.Extra
-    ( unlessM, whenM )
+    ( whenM )
 import           Data.Coerce
     ( coerce )
 import           Data.Foldable
@@ -67,7 +67,7 @@ import           Data.List
     ( foldl1' )
 import qualified Data.Map.Strict              as M
 import           Data.Maybe
-    ( isJust, isNothing )
+    ( isJust )
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
 import qualified PairMap                      as PM
@@ -299,7 +299,7 @@ overlapBetween ing1 ing2 alchemyData
           otherIngNotContains eff = (otherIng `doesNotHave` eff) alchemyData
 
           everyEffKnown =
-            S.size positiveEffs + S.size negativeEffs == S.size completedEffs
+            S.union positiveEffs negativeEffs == completedEffs
       in if everyEffKnown
          then Just positiveEffs
          else Nothing
@@ -413,8 +413,9 @@ learnOverlap ing1 ing2 effs =
     ----------------------------------------------------------------------------
 
     -- Ensure overlap doesn't already exist
-    unlessM (gets $ isNothing . overlapBetween ing1 ing2) $
-      throwError $ InconsistentOverlapReason "Overlap already known"
+    unlessNothingM (gets $ overlapBetween ing1 ing2) $ \overlap ->
+      throwError $ InconsistentOverlapReason $
+        "Overlap already known: " <> T.pack (show overlap)
 
     -- Ensure overlap includes common effects
     do
@@ -473,3 +474,19 @@ learnOverlap ing1 ing2 effs =
     -- Update overlap map if both ingredients are not completed
     when (not isCompleted1 && not isCompleted2) $
       fullOverlapNonComplete %= PM.insertPair ing1 ing2 effs
+
+
+--------------------------------------------------------------------------------
+-- Utilities
+--------------------------------------------------------------------------------
+
+unlessNothingM
+  :: Monad m
+  => m (Maybe a)
+  -> (a -> m ())
+  -> m ()
+unlessNothingM action f =
+  action >>= \case
+    Just a -> f a
+    Nothing -> return ()
+
