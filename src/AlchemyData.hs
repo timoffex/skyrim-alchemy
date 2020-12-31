@@ -47,6 +47,8 @@ import           Control.Carrier.Error.Extra
     ( rethrowing )
 import           Control.Carrier.State.Strict
     ( gets )
+import           Control.Carrier.Throw.Either
+    ( runThrow )
 import           Control.Effect.Error
     ( Error )
 import           Control.Effect.Lens
@@ -61,6 +63,8 @@ import           Control.Monad.Extra
     ( whenM )
 import           Data.Coerce
     ( coerce )
+import           Data.Either.Extra
+    ( fromEither )
 import           Data.Foldable
     ( Foldable (fold) )
 import           Data.List
@@ -332,8 +336,14 @@ learnIngredientEffect
   => IngredientName
   -> EffectName
   -> m ()
-learnIngredientEffect ing eff =
+learnIngredientEffect ing eff = fmap fromEither . runThrow @() $
   do
+    let exitEarly = throwError ()
+
+    -- Do nothing if the ingredient already has the effect
+    whenM (gets $ ing `hasEffect` eff)
+      exitEarly
+
     ----------------------------------------------------------------------------
     -- Avoid contradicting old information
     ----------------------------------------------------------------------------

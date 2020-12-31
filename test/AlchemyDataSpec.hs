@@ -135,10 +135,11 @@ spec = do
         otherIng = ingredientName "Other"
 
         completedEffs = effectName . T.pack . show @Integer <$> [1..4]
+        overlap = S.singleton $ head completedEffs
 
       mapM_ (learnIngredientEffect completedIng) completedEffs
-      learnOverlap completedIng otherIng S.empty
-      gets allKnownOverlaps `shouldReturn` [(pair completedIng otherIng, S.empty)]
+      learnOverlap completedIng otherIng overlap
+      gets allKnownOverlaps `shouldReturn` [(pair completedIng otherIng, overlap)]
 
     it "can learn overlap that completes an ingredient" $ runAlchemyData $ do
       let
