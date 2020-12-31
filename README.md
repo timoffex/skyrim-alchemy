@@ -125,10 +125,12 @@ brute-force solutions and requires solving an NP-hard problem.
 
 ## Overview
 
-There are two primary files: `app/Main.hs` and `src/AlchemyData.hs`.
-The latter defines a data structure for keeping track of alchemical
-knowledge, and the former defines a command-line interface for
-interacting with this data structure.
+There are three primary files:
+
+* `app/Main.hs` has command parsing, and save/load code (and also `main`)
+* `app/Command.hs` defines the available commands
+* `src/AlchemyData.hs` defines a data structure for keeping track of
+  alchemical knowledge
 
 Usually 400+ line files offend my sensibilities, but I learned that
 trying to come up with a file organization structure before writing
@@ -138,12 +140,9 @@ files during development.
 So I started with all of my code in `Main.hs` and later factored out
 `AlchemyData` into its own file. I don't think `AlchemyData` should be
 factored further: it's a big file, but the code scores high on
-coherence. `Main.hs` could be factored just a little: the `Command`
-data type, the command parsing and the monadic wrappers to
-`AlchemyData` queries should be in the same file because I always
-modify those three pieces together, but the `AlchemyData`
-serialization and parsing can go into a separate file. Maybe I'll do
-that later (or maybe I already did and forgot to update this text).
+coherence. Then I factored out the `Command` data type and
+implementations into its own file while keeping command parsing in
+`Main.hs`.
 
 ## How to run
 
