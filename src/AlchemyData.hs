@@ -168,14 +168,16 @@ allKnownOverlaps
 allKnownOverlaps alchemyData =
   PM.assocs (alchemyData^.fullOverlapNonComplete) ++
 
-  -- Overlaps where one ingredient is completed
+  -- Overlaps where one ingredient is completed Convert to a set and
+  -- back to avoid duplicates... TODO clean this up!
+  S.toList (S.fromList
   [ (pair ing1 ing2, overlap)
   | ing1 <- S.toList (allCompletedIngredients alchemyData)
   , ing2 <- S.toList (allKnownIngredients alchemyData)
   , ing1 /= ing2
   , let maybeOverlap = overlapBetween ing1 ing2 alchemyData
         Just overlap = maybeOverlap
-  , isJust maybeOverlap ]
+  , isJust maybeOverlap ])
 
 -- | Gets the known effects of the ingredient.
 effectsOf :: IngredientName -> AlchemyData -> S.Set EffectName
@@ -413,8 +415,14 @@ learnOverlap
   -> IngredientName
   -> S.Set EffectName
   -> m ()
-learnOverlap ing1 ing2 effs =
+learnOverlap ing1 ing2 effs = fmap fromEither . runThrow @() $
   do
+    let exitEarly = throwError ()
+
+    -- Do nothing if this overlap is already known
+    whenM ((== Just effs) <$> gets (overlapBetween ing1 ing2))
+      exitEarly
+
     ----------------------------------------------------------------------------
     -- Avoid contradicting pre-existing information
     ----------------------------------------------------------------------------
@@ -427,7 +435,9 @@ learnOverlap ing1 ing2 effs =
     -- Ensure overlap doesn't already exist
     unlessNothingM (gets $ overlapBetween ing1 ing2) $ \overlap ->
       throwError $ InconsistentOverlapReason $
-        "Overlap already known: " <> T.pack (show overlap)
+        "Overlap between " <>
+        T.pack (show ing1) <> " and " <> T.pack (show ing2) <>
+        " already known: " <> T.pack (show overlap)
 
     -- Ensure overlap includes common effects
     do

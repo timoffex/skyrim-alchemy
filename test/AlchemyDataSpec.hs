@@ -26,6 +26,7 @@ import           AlchemyData
     , learnIngredientEffect
     , learnOverlap
     , nonEffectsOf
+    , overlapBetween
     )
 import           Control.Carrier.Error.Either
     ( ErrorC, runError )
@@ -183,6 +184,13 @@ spec = do
       -- Both have Restore Health, so overlap must include it
       expectThrows @InconsistentOverlap $
         learnOverlap butterflyWing wheat S.empty
+
+    it "can learn overlap that is already known" $
+      runAlchemyData $ do
+      learnOverlap blueMountainFlower nirnroot S.empty
+      learnOverlap blueMountainFlower nirnroot S.empty
+      gets (overlapBetween blueMountainFlower nirnroot)
+        `shouldReturn` Just S.empty
 
 
 
