@@ -200,14 +200,15 @@ effectsOfIngredientIn = flip effectsOf
 -- | Returns whether an ingredient is known to not have an effect.
 doesNotHave :: IngredientName -> EffectName -> AlchemyData -> Bool
 doesNotHave ing eff alchemyData
-  | isCompleted ing alchemyData = S.notMember eff $ effectsOf ing alchemyData
+  | isCompleted ing alchemyData = not (hasEffect ing eff alchemyData)
   | otherwise                   = useRelation
   where
     useRelation = BR.check ing eff $ alchemyData^.incompleteIngNotHasEffRelation
 
 -- | Returns whether an ingredient is known to have an effect.
 hasEffect :: IngredientName -> EffectName -> AlchemyData -> Bool
-hasEffect ing eff = S.member eff . effectsOf ing
+hasEffect ing eff alchemyData =
+  BR.check ing eff (alchemyData^.ingHasEffRelation)
 
 -- | Gets the known non-effects of the ingredient.
 nonEffectsOf :: IngredientName -> AlchemyData -> S.Set EffectName
