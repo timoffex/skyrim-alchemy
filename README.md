@@ -171,10 +171,7 @@ commands. Here is the gist:
 - `potential effects of <ing name>` lists all effects that an ingredient could
   still have
 - `suggestions for <ing name>` suggests a list of ingredients to try
-  combining with your ingredient to learn new effects. The output
-  shows two sets of ingredients: the first set is mutually disjoint,
-  and the second set is just there to cover the rest of the potential
-  effects on your ingredient that aren't covered by the first set.
+  combining with your ingredient to learn new effects
 
 **Update commands**:
 
@@ -183,7 +180,16 @@ commands. Here is the gist:
 - `learn effect <ing name>: [<eff name>]*` records effects on an
   ingredient
 
-Ingredient and effect names are not case sensitive. 
+Ingredient and effect names are not case sensitive.
+
+If you misspell a name, make a backup of output.txt and try editing
+it. The easiest thing to do is to delete all lines with that name, but
+you might not want to do that if that removes a lot of information.
+The file format is very simple: !ING lines list all known effects on
+an ingredient and !OVERLAP lines list the recorded overlap between two
+ingredients (i.e. the result of combining them). You might be able to
+search-and-replace and then merge a few lines together to fix a
+mistake.
 
 ## Haskell thoughts, opinions and lessons
 
