@@ -75,7 +75,7 @@ import           Data.Maybe
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
 import           Data.UPair
-    ( UPair, pair )
+    ( UPair, distinctPairs, pair, unpair )
 import qualified PairMap                      as PM
 
 
@@ -150,6 +150,12 @@ isCompleted ing alchemyData =
 allCompletedIngredients :: AlchemyData -> S.Set IngredientName
 allCompletedIngredients = view completedIngredients
 
+-- | Gets the set of all incomplete ingredients.
+allIncompleteIngredients :: AlchemyData -> S.Set IngredientName
+allIncompleteIngredients alchemyData =
+  allKnownIngredients alchemyData
+  `S.difference` allCompletedIngredients alchemyData
+
 -- | Gets the set of all known ingredients.
 allKnownIngredients :: AlchemyData -> S.Set IngredientName
 allKnownIngredients alchemyData =
@@ -168,16 +174,21 @@ allKnownOverlaps
 allKnownOverlaps alchemyData =
   PM.assocs (alchemyData^.fullOverlapNonComplete) ++
 
-  -- Overlaps where one ingredient is completed Convert to a set and
-  -- back to avoid duplicates... TODO clean this up!
-  S.toList (S.fromList
+  -- Overlaps between completed and incomplete ingredients
   [ (pair ing1 ing2, overlap)
   | ing1 <- S.toList (allCompletedIngredients alchemyData)
-  , ing2 <- S.toList (allKnownIngredients alchemyData)
-  , ing1 /= ing2
+  , ing2 <- S.toList (allIncompleteIngredients alchemyData)
   , let maybeOverlap = overlapBetween ing1 ing2 alchemyData
         Just overlap = maybeOverlap
-  , isJust maybeOverlap ])
+  , isJust maybeOverlap ] ++
+
+  -- Overlaps between pairs of completed ingredients
+  [ (ings, overlap)
+  | ings <- distinctPairs (allCompletedIngredients alchemyData)
+  , let (ing1, ing2) = unpair ings
+        maybeOverlap = overlapBetween ing1 ing2 alchemyData
+        Just overlap = maybeOverlap
+  , isJust maybeOverlap ]
 
 -- | Gets the known effects of the ingredient.
 effectsOf :: IngredientName -> AlchemyData -> S.Set EffectName

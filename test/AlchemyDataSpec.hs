@@ -109,6 +109,19 @@ spec = do
       learnOverlap nirnroot wheat S.empty
       gets allKnownOverlaps `shouldReturn` [(pair nirnroot wheat, S.empty)]
 
+    it "includes overlaps between completed ingredients" $ runAlchemyData $ do
+      let
+        ing1 = ingredientName "ing1"
+        ing2 = ingredientName "ing2"
+
+        effs1 = effectName . T.pack . show @Integer <$> [1..4]
+        effs2 = effectName . T.pack . show @Integer <$> [5..8]
+
+      mapM_ (learnIngredientEffect ing1) effs1
+      mapM_ (learnIngredientEffect ing2) effs2
+
+      gets allKnownOverlaps `shouldReturn` [(pair ing1 ing2, S.empty)]
+
 
   describe "learnIngredientEffect" $ do
     it "learns effect on ingredient" $ runAlchemyData $ do

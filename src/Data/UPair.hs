@@ -2,8 +2,11 @@ module Data.UPair
   ( UPair
   , pair
   , unpair
+  , distinctPairs
+  , pairs
   ) where
 
+import Data.Foldable
 -- | An unordered pair.
 data UPair a
   = UPair { lesser :: a, greater :: a }
@@ -20,3 +23,19 @@ pair x y
 -- The values are ordered with the first one '<=' the second.
 unpair :: UPair a -> (a, a)
 unpair (UPair x y) = (x, y)
+
+
+-- | Lists all distinct unordered pairs of values in the foldable
+-- container.
+distinctPairs :: (Ord a, Foldable t) => t a -> [UPair a]
+distinctPairs = filter (uncurry (/=) . unpair) . pairs
+
+
+-- | Lists all unordered pairs of values in the foldable container.
+pairs :: (Ord a, Foldable t) => t a -> [UPair a]
+pairs t = pairsImpl (toList t)
+  where
+    pairsImpl []     = []
+    pairsImpl (p:ps) = (pair p <$> ps) ++ pairsImpl ps
+
+
