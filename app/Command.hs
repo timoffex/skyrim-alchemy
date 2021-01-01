@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds  #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -38,9 +39,11 @@ import           Control.Effect.State ()
 import           Control.Monad
     ( forM, forM_, unless, when )
 import           Data.Foldable
-    ( Foldable (fold), maximumBy, minimumBy )
+    ( maximumBy )
 import           Data.Function
     ( fix, on )
+import           Data.List
+    ( intercalate )
 import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
@@ -103,10 +106,7 @@ listIngredientsWithAllOf effs = Command $
 suggestCombineWith :: AD.IngredientName -> Command
 suggestCombineWith ing = Command $ do
   cover <- minimumPotentialEffectsCoverOf ing
-  sendIO $ putStrLn "Cover clique:"
-  printOnSeparateLinesWithPrefix "  " $ coverClique cover
-  sendIO $ putStrLn "Cover filling:"
-  printOnSeparateLinesWithPrefix "  " $ coverFilling cover
+  printOnSeparateLines $ coverIngsAndEffs cover
 
 
 listMaximalCliques :: Command
@@ -147,13 +147,19 @@ learnIngredientEffect ing effs = Command $
 --------------------------------------------------------------------------------
 
 
-data EffectCover
-  = EffectCover
-    { coverClique  :: S.Set AD.IngredientName
-    , coverFilling :: S.Set AD.IngredientName }
+newtype EffectCover
+  = EffectCover { coverIngsAndEffs :: [IngredientWithSignificantEffects] }
 
-coverSize :: EffectCover -> Int
-coverSize c = S.size (coverClique c) + S.size (coverFilling c)
+data IngredientWithSignificantEffects
+  = IngredientWithSignificantEffects
+    { ingredient :: AD.IngredientName
+    , effects    :: S.Set AD.EffectName }
+  deriving ( Eq, Ord )
+
+instance Show IngredientWithSignificantEffects where
+  show x = show (ingredient x) ++
+    " for " ++
+    intercalate ", " (show <$> S.toList (effects x))
 
 -- | Approximates a minimum cover of the potential unknown effects on
 -- the ingredient.
@@ -162,46 +168,43 @@ minimumPotentialEffectsCoverOf
   => AD.IngredientName
   -> m EffectCover
 minimumPotentialEffectsCoverOf ing = do
-  -- Get the list of potential effects. Consider all ingredients that
-  -- contain at least one of these effects. Use Bron-Kerbosch to list
-  -- all maximal cliques of these ingredients. For each clique, fill
-  -- in the missing effects using ingredients from the list. Return
-  -- the smallest result.
+
+  -- Approximate a minimum cover by using the greedy algorithm: at
+  -- each step, pick the ingredient that contains the largest number
+  -- of effects that are still missing.
   potentialEffs <- pleaseListPotentialEffectsOf ing
-  ingsToConsider <- pleaseListIngredientsWithAnyOf potentialEffs
-  cliques <- bronKerbosch <$>
-    getNonoverlapAdjacencyMap potentialEffs ingsToConsider
 
-  covers <- forM cliques $ \clique -> do
-    cliqueEffs <- S.unions <$> mapM pleaseListEffectsOf (S.toList clique)
-    let effsMissingFromClique = S.difference potentialEffs cliqueEffs
+  ings <- execState ([] @IngredientWithSignificantEffects) $
+    fix $ \loop -> do
+    ingsSoFar <- get @[IngredientWithSignificantEffects]
+    let
+      effsSoFar = S.unions (effects <$> ingsSoFar)
+      missingEffs = potentialEffs `S.difference` effsSoFar
 
-    extraIngs <- execState (S.empty @AD.IngredientName) $ fix $ \loop -> do
-      ingsSoFar <- get
-      effsSoFar <- fold <$> mapM pleaseListEffectsOf (S.toList ingsSoFar)
-      let missingEffs = effsMissingFromClique `S.difference` effsSoFar
+    unless (S.null missingEffs) $ do
+      ingsForMissingEffs <- pleaseListIngredientsWithAnyOf missingEffs
 
-      unless (S.null missingEffs) $ do
-        ingsForMissingEffs <- pleaseListIngredientsWithAnyOf missingEffs
+      rankedIngsWithEffs <- forM (S.toList ingsForMissingEffs) $
+        \ingToRank -> do
+        ingEffs <- pleaseListEffectsOf ingToRank
+        let importantEffs = S.intersection ingEffs missingEffs
+        return
+          ( IngredientWithSignificantEffects
+              ingToRank
+              importantEffs
+          , S.size importantEffs
+          )
 
-        rankedIngs <- forM (S.toList ingsForMissingEffs) $ \ingToRank -> do
-          ingEffs <- pleaseListEffectsOf ingToRank
-          return (ingToRank, S.size $ S.intersection ingEffs missingEffs)
+      -- maximumBy requires rankedIngsWithEffs to be non-empty. It is
+      -- non-empty because there missingEffs is non-empty, and there
+      -- is at least one ingredient for every effect (because that's
+      -- the only way for an effect to be known).
+      modify $ (:) $
+        fst $ maximumBy (compare `on` snd) rankedIngsWithEffs
 
-        -- TODO: Partial
-        modify $ S.insert $
-          fst $ maximumBy (compare `on` snd) rankedIngs
+      loop
 
-        loop
-
-
-    return $ EffectCover
-      { coverClique = clique
-      , coverFilling = extraIngs }
-
-  -- TODO: Partial
-  return $ minimumBy (compare `on` coverSize) covers
-
+  return $ EffectCover $ reverse ings
 
 pleaseListEffects
   :: Has (State AD.AlchemyData) sig m
@@ -266,35 +269,12 @@ pleaseListMaximalCliques = bronKerbosch <$> do
 
   let overlaps = AD.allKnownOverlaps alch
 
-  -- TODO: Share code with getNonoverlapAdjacencyMap
-
   -- Construct an adjacency map from the overlaps where two
   -- ingredients are adjacent iff they have an empty overlap.
   return $ run $ execState M.empty $
     forM_ overlaps $ \(ingPair, effs) ->
       when (S.null effs) $ do
         let (ing1, ing2) = unpair ingPair
-        modify $ multiMapInsert ing1 ing2
-        modify $ multiMapInsert ing2 ing1
-
-getNonoverlapAdjacencyMap
-  :: Has (State AD.AlchemyData) sig m
-  => S.Set AD.EffectName
-  -> S.Set AD.IngredientName
-  -> m (M.Map AD.IngredientName (S.Set AD.IngredientName))
-getNonoverlapAdjacencyMap effsThatMatter ings = do
-  overlaps <- gets AD.allKnownOverlaps
-
-  -- TODO: Do this more efficiently!
-
-  -- Construct an adjacency map from the overlaps where two
-  -- ingredients are adjacent iff they have an empty overlap.
-  return $ run $ execState M.empty $
-    forM_ overlaps $ \(ingPair, effs) -> do
-      let (ing1, ing2) = unpair ingPair
-      when (S.member ing1 ings &&
-            S.member ing2 ings &&
-            effs `S.isSubsetOf` effsThatMatter) $ do
         modify $ multiMapInsert ing1 ing2
         modify $ multiMapInsert ing2 ing1
 
