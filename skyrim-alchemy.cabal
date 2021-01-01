@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 58f5cea7fe0bfc7bf8f185489a82a4387ec690f29106136276f4d6c27fb38a98
+-- hash: 56eeea8100d53a60d3aac2b946ab4b45074bc95718544c967a2c91810e07d783
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -44,6 +44,7 @@ library
 executable skyrim-alchemy-exe
   main-is: Main.hs
   other-modules:
+      CLI
       Command
       Paths_skyrim_alchemy
   hs-source-dirs:
