@@ -132,7 +132,8 @@ ingredientDef = lexeme $ do
 
 
 namePart :: Parser T.Text
-namePart = T.pack <$> MP.some (MP.alphaNumChar MP.<|> MP.char '\'')
+namePart = T.pack <$>
+  MP.some (MP.alphaNumChar MP.<|> MP.char '\'' MP.<|> MP.char '-')
 
 ingredientName :: Parser AD.IngredientName
 ingredientName = AD.ingredientName . T.unwords <$>
