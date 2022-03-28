@@ -5,8 +5,15 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 
+
 import qualified AlchemyData                  as AD
+import           AlchemyInteraction
+import           AlchemyInteractionIO
+    ( runAlchemyInteractionIO )
 import           CLI
+    ( parseCommand, runCommand )
+import qualified Command                      as Cmd
+import           Control.Algebra
 import           Control.Carrier.Error.Either
     ( runError )
 import           Control.Carrier.Lift
@@ -15,6 +22,7 @@ import           Control.Carrier.State.Strict
     ( evalState, execState, run )
 import           Control.Effect.Lift
     ( sendIO )
+import           Control.Effect.Lift
 import           Control.Effect.State
     ( get, modify )
 import           Control.Exception
@@ -30,9 +38,12 @@ import           Data.UPair
     ( unpair )
 import           Data.Void
     ( Void )
+import           System.Console.Readline
+    ( addHistory, readline )
 import qualified Text.Megaparsec              as MP
 import qualified Text.Megaparsec.Char         as MP
 import qualified Text.Megaparsec.Char.Lexer   as L
+
 
 main :: IO ()
 main = do
@@ -50,14 +61,17 @@ main = do
     Right initialData -> do
       putStrLn "Parsed successfully!"
 
-      runM . evalState initialData $ forever $ do
+      runM .
+          evalState initialData .
+          runAlchemyInteractionIO .
+          forever $ do
         -- Save before every command.
         get >>=
           sendIO .
           writeFile outputFile .
           serializeAlchemyData
 
-        sendIO tryReadCommand >>= \case
+        tryReadCommand >>= \case
           Nothing -> sendIO $ putStrLn "Invalid command."
           Just cmd -> runCommand cmd
 
@@ -185,3 +199,20 @@ serializeAlchemyData alchemyData = run . execState "" $ do
       append $ show eff
       append ", "
     newline
+
+
+--------------------------------------------------------------------------------
+-- Parsing commands
+--------------------------------------------------------------------------------
+
+tryReadCommand
+  :: ( Has AlchemyInteraction sig m
+     , Has (Lift IO) sig m
+     )
+  => m (Maybe Cmd.Command)
+tryReadCommand = do
+  sendIO (readline ">>> ") >>= \case
+    Nothing -> return $ Just Cmd.exit
+    Just s -> do
+      sendIO $ addHistory s
+      parseCommand s

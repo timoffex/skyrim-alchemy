@@ -1,16 +1,19 @@
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Defines the command-line interface to this program.
 module CLI
-  ( tryReadCommand
+  ( parseCommand
   , Cmd.runCommand
   , Cmd.Command
   ) where
 
 
 import qualified AlchemyData                as AD
+import           AlchemyInteraction
+    ( AlchemyInteraction, printError )
 import qualified Command                    as Cmd
+import           Control.Algebra
+    ( Has )
 import           Data.Functor
     ( void )
 import qualified Data.Set                   as S
@@ -18,25 +21,20 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Lazy             as LT
 import           Data.Void
     ( Void )
-import           System.Console.Readline
-    ( addHistory, readline )
 import qualified Text.Megaparsec            as MP
 import qualified Text.Megaparsec.Char       as MP
 import qualified Text.Megaparsec.Char.Lexer as L
 
 
-tryReadCommand :: IO (Maybe Cmd.Command)
-tryReadCommand = do
-  readline ">>> " >>= \case
-    Nothing -> return $ Just Cmd.exit
-    Just s -> do
-      addHistory s
-      case MP.parse commandDef "input" (LT.pack s) of
-        Left err  -> do
-          putStr (MP.errorBundlePretty err)
-          return Nothing
-        Right cmd -> do
-          return $ Just cmd
+parseCommand
+  :: Has AlchemyInteraction sig m
+  => String
+  -> m (Maybe Cmd.Command)
+parseCommand s = case MP.parse commandDef "input" (LT.pack s) of
+  Left err -> do
+    printError (MP.errorBundlePretty err)
+    return Nothing
+  Right cmd -> return $ Just cmd
 
 commandDef :: Parser Cmd.Command
 commandDef = MP.choice
@@ -49,7 +47,6 @@ commandDef = MP.choice
   , listEffectsCommand
   , listIngredientsWithAllOfCommand
   , listIngredientsCommand
-  , listMaximalCliquesCommand
   , exitCommand ]
 
 learnOverlapCommand :: Parser Cmd.Command
@@ -104,14 +101,8 @@ suggestCombineWithCommand = do
   void (symbol "suggestions" >> MP.optional (symbol "for"))
   Cmd.suggestCombineWith <$> ingredientName
 
-listMaximalCliquesCommand :: Parser Cmd.Command
-listMaximalCliquesCommand =
-  symbol "cliques" >> MP.eof >> return Cmd.listMaximalCliques
-
 exitCommand :: Parser Cmd.Command
 exitCommand = symbol "exit" >> return Cmd.exit
-
-
 
 
 --------------------------------------------------------------------------------

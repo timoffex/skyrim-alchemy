@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 56eeea8100d53a60d3aac2b946ab4b45074bc95718544c967a2c91810e07d783
+-- hash: cd9acb37fe2e2fb7296821fba2ff5bbc33bffca19f2af24dfe7b9f271340301a
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -15,8 +15,12 @@ build-type:     Simple
 library
   exposed-modules:
       AlchemyData
+      AlchemyInteraction
+      AlchemyInteractionIO
       BinaryRelation
       BronKerbosch
+      CLI
+      Command
       Control.Carrier.Error.Extra
       Data.UPair
       PairMap
@@ -38,14 +42,12 @@ library
     , readline >=1.0.3.0
     , split >=0.2.3.3
     , text >=1.2.3.1
-    , transformers >=0.5.6.2
+    , transformers >=0.5.5.0
   default-language: Haskell2010
 
 executable skyrim-alchemy-exe
   main-is: Main.hs
   other-modules:
-      CLI
-      Command
       Paths_skyrim_alchemy
   hs-source-dirs:
       app
@@ -65,7 +67,7 @@ executable skyrim-alchemy-exe
     , skyrim-alchemy
     , split >=0.2.3.3
     , text >=1.2.3.1
-    , transformers >=0.5.6.2
+    , transformers >=0.5.5.0
   default-language: Haskell2010
 
 test-suite skyrim-alchemy-test
@@ -73,6 +75,7 @@ test-suite skyrim-alchemy-test
   main-is: Spec.hs
   other-modules:
       AlchemyDataSpec
+      CLISpec
       Paths_skyrim_alchemy
   hs-source-dirs:
       test
@@ -94,5 +97,5 @@ test-suite skyrim-alchemy-test
     , skyrim-alchemy
     , split >=0.2.3.3
     , text >=1.2.3.1
-    , transformers >=0.5.6.2
+    , transformers >=0.5.5.0
   default-language: Haskell2010

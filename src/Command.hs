@@ -16,41 +16,30 @@ module Command
   , listIngredients
   , listIngredientsWithAllOf
   , suggestCombineWith
-  , listMaximalCliques
   , learnOverlap
   , learnIngredientEffect
   ) where
 
 
 import qualified AlchemyData                  as AD
-import           BronKerbosch
-    ( bronKerbosch )
+import qualified AlchemyInteraction           as Interaction
 import           Control.Algebra
-    ( Has, run )
+    ( Has )
 import           Control.Carrier.Error.Extra
     ( catching, rethrowing )
 import           Control.Carrier.State.Strict
     ( State, execState, get, gets, modify )
 import           Control.Effect.Error
     ( Error )
-import           Control.Effect.Lift
-    ( Lift, sendIO )
 import           Control.Effect.State ()
 import           Control.Monad
-    ( forM, forM_, unless, when )
+    ( forM, unless )
 import           Data.Foldable
     ( maximumBy )
 import           Data.Function
     ( fix, on )
-import           Data.List
-    ( intercalate )
-import qualified Data.Map.Strict              as M
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
-import           Data.UPair
-    ( unpair )
-import           System.Exit
-    ( exitSuccess )
 
 
 -- | A command for interacting with an 'AD.AlchemyData'.
@@ -60,14 +49,13 @@ newtype Command
 
 
 type HasCommandEffects sig m =
-  ( Has (Lift IO) sig m
+  ( Has Interaction.AlchemyInteraction sig m
   , Has (State AD.AlchemyData) sig m )
 
 
--- TODO: Use an Either/Maybe effect to short-circuit.
 -- | Exits the program.
 exit :: Command
-exit = Command $ sendIO exitSuccess
+exit = Command Interaction.exit
 
 
 --------------------------------------------------------------------------------
@@ -76,19 +64,19 @@ exit = Command $ sendIO exitSuccess
 
 listEffects :: Command
 listEffects = Command $
-  pleaseListEffects >>= printOnSeparateLines
+  pleaseListEffects >>= Interaction.printEffects
 
 listEffectsOf :: AD.IngredientName -> Command
 listEffectsOf ing = Command $
-  pleaseListEffectsOf ing >>= printOnSeparateLines
+  pleaseListEffectsOf ing >>= Interaction.printEffects
 
 listNonEffectsOf :: AD.IngredientName -> Command
 listNonEffectsOf ing = Command $
-  pleaseListNonEffectsOf ing >>= printOnSeparateLines
+  pleaseListNonEffectsOf ing >>= Interaction.printEffects
 
 listPotentialEffectsOf :: AD.IngredientName -> Command
 listPotentialEffectsOf ing = Command $
-  pleaseListPotentialEffectsOf ing >>= printOnSeparateLines
+  pleaseListPotentialEffectsOf ing >>= Interaction.printEffects
 
 
 --------------------------------------------------------------------------------
@@ -97,25 +85,16 @@ listPotentialEffectsOf ing = Command $
 
 listIngredients :: Command
 listIngredients = Command $
-  pleaseListIngredients >>= printOnSeparateLines
+  pleaseListIngredients >>= Interaction.printIngredients
 
 listIngredientsWithAllOf :: S.Set AD.EffectName -> Command
 listIngredientsWithAllOf effs = Command $
-  pleaseListIngredientsWithAllOf effs >>= printOnSeparateLines
+  pleaseListIngredientsWithAllOf effs >>= Interaction.printIngredients
 
 suggestCombineWith :: AD.IngredientName -> Command
-suggestCombineWith ing = Command $ do
-  cover <- minimumPotentialEffectsCoverOf ing
-  printOnSeparateLines $ coverIngsAndEffs cover
-
-
-listMaximalCliques :: Command
-listMaximalCliques = Command $ do
-  cliques <- pleaseListMaximalCliques
-  forM_ cliques $ \clique -> do
-    sendIO $ putStrLn "Clique:"
-    printOnSeparateLines clique
-    sendIO $ putStrLn ""
+suggestCombineWith ing = Command $
+  minimumPotentialEffectsCoverOf ing >>=
+  Interaction.printOrderedIngredientsForEffects
 
 
 --------------------------------------------------------------------------------
@@ -129,7 +108,7 @@ learnOverlap
   -> Command
 learnOverlap ing1 ing2 effs = Command $
   catching (tryLearnOverlap ing1 ing2 effs) $ \err ->
-    sendIO $ putStrLn $ "Error: " ++ T.unpack err
+    Interaction.printError $ T.unpack err
 
 learnIngredientEffect
   :: AD.IngredientName
@@ -137,36 +116,19 @@ learnIngredientEffect
   -> Command
 learnIngredientEffect ing effs = Command $
   catching (mapM_ (tryLearnIngredientEffect ing) effs) $ \err ->
-    sendIO $ putStrLn $ "Error: " ++ T.unpack err
-
-
+    Interaction.printError $ T.unpack err
 
 
 --------------------------------------------------------------------------------
 -- Command implementation helpers
 --------------------------------------------------------------------------------
 
-
-newtype EffectCover
-  = EffectCover { coverIngsAndEffs :: [IngredientWithSignificantEffects] }
-
-data IngredientWithSignificantEffects
-  = IngredientWithSignificantEffects
-    { ingredient :: AD.IngredientName
-    , effects    :: S.Set AD.EffectName }
-  deriving ( Eq, Ord )
-
-instance Show IngredientWithSignificantEffects where
-  show x = show (ingredient x) ++
-    " for " ++
-    intercalate ", " (show <$> S.toList (effects x))
-
 -- | Approximates a minimum cover of the potential unknown effects on
 -- the ingredient.
 minimumPotentialEffectsCoverOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
-  -> m EffectCover
+  -> m [Interaction.IngredientForEffects]
 minimumPotentialEffectsCoverOf ing = do
 
   -- Approximate a minimum cover by using the greedy algorithm: at
@@ -174,10 +136,12 @@ minimumPotentialEffectsCoverOf ing = do
   -- of effects that are still missing.
   potentialEffs <- pleaseListPotentialEffectsOf ing
 
-  ings <- execState ([] @IngredientWithSignificantEffects) $
+  ings <- execState ([] @Interaction.IngredientForEffects) $
     fix $ \loop -> do
-    ingsSoFar <- get @[IngredientWithSignificantEffects]
+    ingsSoFar <- get @[Interaction.IngredientForEffects]
+
     let
+      effects (Interaction.IngredientForEffects _ effs) = effs
       effsSoFar = S.unions (effects <$> ingsSoFar)
       missingEffs = potentialEffs `S.difference` effsSoFar
 
@@ -189,7 +153,7 @@ minimumPotentialEffectsCoverOf ing = do
         ingEffs <- pleaseListEffectsOf ingToRank
         let importantEffs = S.intersection ingEffs missingEffs
         return
-          ( IngredientWithSignificantEffects
+          ( Interaction.IngredientForEffects
               ingToRank
               importantEffs
           , S.size importantEffs
@@ -204,7 +168,7 @@ minimumPotentialEffectsCoverOf ing = do
 
       loop
 
-  return $ EffectCover $ reverse ings
+  return $ reverse ings
 
 pleaseListEffects
   :: Has (State AD.AlchemyData) sig m
@@ -261,24 +225,6 @@ pleaseListPotentialEffectsOf ing = do
   ingEffs <- pleaseListEffectsOf ing
   return $ allEffs `S.difference` (nonEffs `S.union` ingEffs)
 
-pleaseListMaximalCliques
-  :: Has (State AD.AlchemyData) sig m
-  => m [S.Set AD.IngredientName]
-pleaseListMaximalCliques = bronKerbosch <$> do
-  alch <- get
-
-  let overlaps = AD.allKnownOverlaps alch
-
-  -- Construct an adjacency map from the overlaps where two
-  -- ingredients are adjacent iff they have an empty overlap.
-  return $ run $ execState M.empty $
-    forM_ overlaps $ \(ingPair, effs) ->
-      when (S.null effs) $ do
-        let (ing1, ing2) = unpair ingPair
-        modify $ multiMapInsert ing1 ing2
-        modify $ multiMapInsert ing2 ing1
-
-
 tryLearnOverlap
   :: ( Has (State AD.AlchemyData) sig m
      , Has (Error T.Text) sig m )
@@ -300,28 +246,3 @@ tryLearnIngredientEffect
 tryLearnIngredientEffect ing eff =
   rethrowing @AD.InconsistentEffect (T.pack . show) $
   AD.learnIngredientEffect ing eff
-
-
---------------------------------------------------------------------------------
--- Utilities
---------------------------------------------------------------------------------
-
-printOnSeparateLines
-  :: ( Has (Lift IO) sig m
-     , Foldable t
-     , Show a )
-  => t a -> m ()
-printOnSeparateLines = printOnSeparateLinesWithPrefix ""
-
-printOnSeparateLinesWithPrefix
-  :: ( Has (Lift IO) sig m
-     , Foldable t
-     , Show a )
-  => String -> t a -> m ()
-printOnSeparateLinesWithPrefix prefix = mapM_ $ \a ->
-  sendIO $ putStrLn $ prefix ++ show a
-
-multiMapInsert
-  :: ( Ord k, Ord a )
-  => k -> a -> M.Map k (S.Set a) -> M.Map k (S.Set a)
-multiMapInsert k a = M.insertWith (<>) k (S.singleton a)
