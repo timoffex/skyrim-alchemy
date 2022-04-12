@@ -11,6 +11,7 @@ module AlchemyData
   ( IngredientName, ingredientName
   , EffectName, effectName
   , AlchemyData
+  , Overlap (Overlap)
 
   -- * Construction
   , emptyAlchemyData
@@ -89,6 +90,11 @@ newtype IngredientName
 
 newtype EffectName
   = EffectName T.Text
+  deriving ( Eq, Ord )
+
+
+data Overlap
+  = Overlap IngredientName IngredientName (Set EffectName)
   deriving ( Eq, Ord )
 
 

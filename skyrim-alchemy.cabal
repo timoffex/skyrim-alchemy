@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cd9acb37fe2e2fb7296821fba2ff5bbc33bffca19f2af24dfe7b9f271340301a
+-- hash: 8bbf35cf1340735ce0f6658167b58029ab516d9c66bfec9a600c28f4f2e32b1e
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -14,6 +14,8 @@ build-type:     Simple
 
 library
   exposed-modules:
+      AlchemyComponent.AlchemyKnowledge
+      AlchemyComponent.Component
       AlchemyData
       AlchemyInteraction
       AlchemyInteractionIO
@@ -22,6 +24,7 @@ library
       CLI
       Command
       Control.Carrier.Error.Extra
+      Data.HList
       Data.UPair
       PairMap
   other-modules:
