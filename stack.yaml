@@ -13,4 +13,4 @@ extra-deps:
 - multi-containers-0.1.1
 
 ghc-options:
-  "$locals": -Wall
+  "$locals": -Wall -Wno-missing-signatures -Wmissing-exported-signatures -Wno-name-shadowing
