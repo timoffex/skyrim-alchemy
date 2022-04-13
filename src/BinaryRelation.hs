@@ -26,8 +26,8 @@ import qualified Data.Tuple        as Tuple
 
 data BinaryRelation left right
   = BinaryRelation
-    { _leftToRight :: SM.SetMultimap left right
-    , _rightToLeft :: SM.SetMultimap right left
+    { _leftToRight :: !(SM.SetMultimap left right)
+    , _rightToLeft :: !(SM.SetMultimap right left)
     }
 
 -- | An empty relation.

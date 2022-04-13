@@ -1,7 +1,0 @@
-
-
-module AlchemyComponent.AlchemyKnowledge
-  (
-  ) where
-
-

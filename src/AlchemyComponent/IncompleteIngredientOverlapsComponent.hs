@@ -60,8 +60,7 @@ overlapBetweenIncompleteIngredients ing1 ing2 =
 
 instance ( Monad m
          , HasIngredientEffectsComponent alchemy ) =>
-    Component.Component alchemy m
-        IncompleteIngredientOverlapsComponent
+    Component.Component alchemy m IncompleteIngredientOverlapsComponent
   where
     initializeComponent _ = return $
       IncompleteIngredientOverlapsComponent PairMap.empty

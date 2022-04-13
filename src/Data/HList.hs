@@ -7,9 +7,10 @@
 module Data.HList where
 
 
+-- | A strict heterogenous list.
 data HList xs where
   HEmpty :: HList '[]
-  HCons :: x -> HList xs -> HList (x ': xs)
+  HCons :: !x -> !(HList xs) -> HList (x ': xs)
 
 
 class Has x xs where

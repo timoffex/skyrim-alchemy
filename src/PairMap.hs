@@ -31,8 +31,8 @@ import           Prelude         hiding
 -- | A map from unordered pairs of keys to values.
 data PairMap k a
   = PairMap
-    { lesserToGreater :: M.Map k (M.Map k a)
-    , greaterToLesser :: M.Map k (M.Map k a) }
+    { lesserToGreater :: !(M.Map k (M.Map k a))
+    , greaterToLesser :: !(M.Map k (M.Map k a)) }
 
 
 empty :: Ord k => PairMap k a
