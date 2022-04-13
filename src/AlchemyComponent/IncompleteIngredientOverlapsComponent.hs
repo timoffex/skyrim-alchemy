@@ -92,11 +92,11 @@ validate
 
     existingOverlap = PairMap.lookupPair (pair ing1 ing2) knownOverlaps
     existingOverlapEffects = let Just effects = existingOverlap in effects
-    overlapExists = isJust existingOverlap
+    overlapExists = isJust existingOverlap && existingOverlapEffects != effects
     overlapExistsError = OverlapValidationError $
-        "Overlap between " <>
+        "A different overlap between " <>
         T.pack (show ing1) <> " and " <> T.pack (show ing2) <>
-        " already known: " <> T.pack (show existingOverlapEffects)
+        " is already recorded: " <> T.pack (show existingOverlapEffects)
 
     effectsInCommon = Set.intersection (effectsOf ing1 alchemy)
                                        (effectsOf ing2 alchemy)
