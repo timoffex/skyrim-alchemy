@@ -1,6 +1,6 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module AlchemyComponent.IngredientEffectsComponent
@@ -15,7 +15,7 @@ module AlchemyComponent.IngredientEffectsComponent
 
 import qualified AlchemyComponent.Component as Component
 import           AlchemyData
-    ( Overlap (Overlap), IngredientName, EffectName )
+    ( EffectName, IngredientName, Overlap (Overlap) )
 import           BinaryRelation
     ( BinaryRelation )
 import qualified BinaryRelation             as BR
@@ -44,7 +44,7 @@ getComponent alchemy =
 effectsOf
   :: HasIngredientEffectsComponent alchemy
   => IngredientName -> alchemy -> Set EffectName
-effectsOf ing = BR.byLeft ing . getComponent 
+effectsOf ing = BR.byLeft ing . getComponent
 
 -- | Gets the set of all effects that are at least on one ingredient.
 allKnownEffects
@@ -61,7 +61,7 @@ allIngredientsWithEffects = BR.lefts . getComponent
 
 instance
     ( Monad m
-    ) => Component.Component algebra m IngredientEffectsComponent where
+    ) => Component.Component alchemy m IngredientEffectsComponent where
   initializeComponent _ = return $ IngredientEffectsComponent BR.empty
   componentLearnOverlap overlap _ ingredientEffects =
     return $ insertOverlap overlap ingredientEffects
