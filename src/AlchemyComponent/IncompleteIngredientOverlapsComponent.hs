@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module AlchemyComponent.IncompleteIngredientOverlapsComponent
   ( IncompleteIngredientOverlapsComponent
@@ -13,10 +14,10 @@ module AlchemyComponent.IncompleteIngredientOverlapsComponent
 
 
 import           AlchemyComponent.Component                  as Component
-    ( OverlapValidationError (OverlapValidationError) )
+    ( AlchemyHas, OverlapValidationError (OverlapValidationError) )
 import qualified AlchemyComponent.Component                  as Component
 import           AlchemyComponent.IngredientEffectsComponent
-    ( HasIngredientEffectsComponent, effectsOf )
+    ( IngredientEffectsComponent, effectsOf )
 import           AlchemyData
     ( EffectName, IngredientName, Overlap (Overlap) )
 import           Data.Maybe
@@ -59,7 +60,7 @@ overlapBetweenIncompleteIngredients ing1 ing2 =
 
 
 instance ( Monad m
-         , HasIngredientEffectsComponent alchemy ) =>
+         , AlchemyHas IngredientEffectsComponent alchemy ) =>
     Component.Component alchemy m IncompleteIngredientOverlapsComponent
   where
     initializeComponent _ = return $
@@ -92,7 +93,8 @@ validate
 
     existingOverlap = PairMap.lookupPair (pair ing1 ing2) knownOverlaps
     existingOverlapEffects = let Just effects = existingOverlap in effects
-    overlapExists = isJust existingOverlap && existingOverlapEffects != effects
+    overlapExists = isJust existingOverlap &&
+                    (existingOverlapEffects != effects)
     overlapExistsError = OverlapValidationError $
         "A different overlap between " <>
         T.pack (show ing1) <> " and " <> T.pack (show ing2) <>

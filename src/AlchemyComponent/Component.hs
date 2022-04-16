@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -5,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
@@ -31,7 +33,13 @@ module AlchemyComponent.Component
   , Alchemy (..)
 
   , Component (..)
+  , IsAlchemyInformation (..)
+  , AlchemyHas
+  , AlchemyHasBefore
+
   , Has (..)
+  , HasUpdated (..)
+  , HasInitialized (..)
 
   , OverlapValidationError (..)
   ) where
@@ -58,10 +66,10 @@ import qualified Data.Text                    as T
 -- types that track specific bits of information.
 --
 -- One can think of this as a record with a field for each type @c@ in @cs@.
-newtype AlchemyComponents cs = AlchemyComponents (HList cs)
+data AlchemyComponents cs = AlchemyComponents { _components :: !(HList cs) }
 
 
--- | Things you can do with an 'AlchemyComponents' data type.
+-- | Things you can do with 'AlchemyComponents'.
 class Alchemy m alchemy where
   -- | Creates an empty instance representing zero alchemy knowledge.
   initialize :: m alchemy
@@ -71,26 +79,27 @@ class Alchemy m alchemy where
   learnOverlap :: Overlap -> alchemy -> m alchemy
 
 
+
 -- | Class for types that process the results of combining ingredients in
 -- Skyrim.
 --
--- @alchemy@ is usually instantiated to an @AlchemyComponents@ value with
--- all available components. 'Component' instances can require other components
--- to be available in this.
+-- 'Component' instances can require other components to be available and can
+-- require other components to be updated in a specific order by adding 'Has'
+-- and 'HasUpdated' constraints on @alchemy@.
 --
 -- @m@ is the monad in which computations are done. 'Component' instances can
 -- restrict this to allow special effects in their functions.
 class Monad m => Component alchemy m c where
 
   -- | Creates an empty instance of the component representing zero knowledge.
-  initializeComponent :: Proxy alchemy -> m c
+  initializeComponent :: PartiallyInitialized alchemy -> m c
 
   -- | Validates that the overlap does not contradict known information.
   --
   -- Defaults to returning no errors.
   validateOverlap
     :: Overlap
-    -> alchemy
+    -> PartiallyValidated alchemy
     -> c
     -> m (Maybe OverlapValidationError)
   validateOverlap _ _ _ = return Nothing
@@ -101,7 +110,7 @@ class Monad m => Component alchemy m c where
   -- Defaults to returning the original data structure unchanged.
   componentLearnOverlap
     :: Overlap
-    -> alchemy
+    -> PartiallyUpdated alchemy
     -> c
     -> m c
   componentLearnOverlap _ _ c = return c
@@ -112,51 +121,163 @@ instance Show OverlapValidationError where
   show = T.unpack . coerce
 
 
--- | Class that can be used to get an individual component from an
--- 'AlchemyComponents' structure.
+-- | The data types used in the 'Component' class.
+class IsAlchemyInformation alchemy where
+  type Snapshot alchemy
+  data PartiallyInitialized alchemy
+  data PartiallyValidated alchemy
+  data PartiallyUpdated alchemy
+
+
+-- | Constraint for 'Component' instance declarations that declares a dependency
+-- on another component, without requiring that component to appear earlier
+-- in the list of components.
+type AlchemyHas c alchemy
+  = ( Has c (PartiallyUpdated alchemy)
+    , Has c (PartiallyValidated alchemy)
+    , Has c (Snapshot alchemy) )
+
+-- | Like 'AlchemyHas', but additionally requires that the specified component
+-- appears before the current component.
 --
--- This should be imported with a qualified import and used as @Component.Has@.
-class Has c alchemy where
-  get :: alchemy -> c
-
-instance HList.Has c cs => Has c (AlchemyComponents cs) where
-  get (AlchemyComponents cs) = HList.get cs
-
-instance (Functor m, Alchemy' m cs cs) => Alchemy m (AlchemyComponents cs) where
-  initialize = AlchemyComponents <$> initialize_ (Proxy @(AlchemyComponents cs))
-  learnOverlap overlap alchemy@(AlchemyComponents cs) =
-    AlchemyComponents <$> learnOverlap_ overlap alchemy cs
+-- This allows the component to use updated values from another component
+-- when initializing or updating.
+type AlchemyHasBefore c alchemy
+  = ( AlchemyHas c alchemy
+    , HasUpdated c (PartiallyUpdated alchemy)
+    , HasInitialized c (PartiallyInitialized alchemy) )
 
 
--- | Helper class to recursively define 'Alchemy' instances for
--- 'AlchemyComponents'.
-class Alchemy' m cs tail where
+-- | Class that allows getting the value of a specific component in an
+-- alchemy data structure.
+--
+-- This is meant to be imported with a qualified import and referenced as
+-- @Component.Has@ and @Component.get@.
+class Has c alchemyType where
+  get :: alchemyType -> c
 
-  initialize_ :: Proxy (AlchemyComponents cs) -> m (HList tail)
+-- | Class that allows getting the updated value of a specific component in
+-- the 'componentLearnOverlap' function.
+class HasUpdated c alchemyType where
+  getUpdated :: alchemyType -> c
 
-  learnOverlap_
+-- | Class that allows a component's initial value to depend on the initial
+-- value of another component.
+class HasInitialized c alchemyType where
+  getInitialized :: alchemyType -> c
+
+
+--------------------------------------------------------------------------------
+-- Implementation details                                                     --
+--------------------------------------------------------------------------------
+
+
+
+data ComponentData (all :: [*]) (preceding :: [*])
+
+instance IsAlchemyInformation (ComponentData all preceding) where
+  type Snapshot (ComponentData all preceding)
+    = AlchemyComponents all
+
+  data PartiallyValidated (ComponentData all preceding)
+    = PartiallyValidated
+      -- TODO: Improve this name
+      { _partiallyValidatedOldData :: !(HList all) }
+
+  data PartiallyUpdated (ComponentData all preceding)
+    = PartiallyUpdated
+      { _oldData :: !(HList all)
+      , _newData :: !(HList preceding) }
+
+  data PartiallyInitialized (ComponentData all preceding)
+    = PartiallyInitialized
+      { _initialized :: !(HList preceding) }
+
+
+
+instance HList.Has c cs
+    => Has c (AlchemyComponents cs)
+  where
+    get = HList.get . _components
+
+instance HList.Has c cs
+    => Has c (PartiallyValidated (ComponentData cs preceding))
+  where
+    get = HList.get . _partiallyValidatedOldData
+
+instance HList.Has c cs
+    => Has c (PartiallyUpdated (ComponentData cs preceding))
+  where
+    get = HList.get . _oldData
+
+instance HList.Has c preceding
+    => HasUpdated c (PartiallyUpdated (ComponentData cs preceding))
+  where
+    getUpdated = HList.get . _newData
+
+instance HList.Has c preceding
+    => HasInitialized c (PartiallyInitialized (ComponentData cs preceding))
+  where
+    getInitialized = HList.get . _initialized
+
+
+instance ( Functor m
+         , AlchemyInitialize m cs cs '[]
+         , AlchemyLearn m cs cs '[]
+         )
+    => Alchemy m (AlchemyComponents cs)
+  where
+    initialize
+      = AlchemyComponents <$>
+          initializeRecursively (Proxy @cs) HEmpty
+    learnOverlap overlap alchemy
+      = AlchemyComponents <$>
+          learnOverlapRecursively overlap alchemy (_components alchemy) HEmpty
+
+class AlchemyInitialize m (all :: [*]) remaining initialized where
+  initializeRecursively :: Proxy all -> HList initialized -> m (HList remaining)
+class AlchemyLearn m all remaining updated where
+  learnOverlapRecursively
     :: Overlap
-    -> AlchemyComponents cs
-    -> HList tail
-    -> m (HList tail)
+    -> AlchemyComponents all
+    -> HList remaining
+    -> HList updated
+    -> m (HList remaining)
 
-instance Monad m => Alchemy' m cs '[] where
-  initialize_ _ = return HEmpty
-  learnOverlap_ _ _ tail = return tail
+
+instance Monad m => AlchemyInitialize m all '[] cs where
+  initializeRecursively _ _ = return HEmpty
+
+instance ( Monad m
+         , Component (ComponentData all initialized) m c
+         , AlchemyInitialize m all remaining (c ': initialized) )
+    => AlchemyInitialize m all (c ': remaining) initialized
+  where
+    initializeRecursively proxy initialized = do
+      c' <- initializeComponent $
+        PartiallyInitialized @all initialized
+      remaining' <- initializeRecursively proxy (HCons c' initialized)
+      return $ HCons c' remaining'
+
+
+instance Monad m => AlchemyLearn m all '[] cs where
+  learnOverlapRecursively _ _ _ _ = return HEmpty
 
 instance ( Algebra.Has (Error OverlapValidationError) sig m
-         , Component (AlchemyComponents cs) m c
-         , Alchemy' m cs tail
-         ) => Alchemy' m cs (c ': tail) where
-  initialize_ proxy = HCons
-      <$> initializeComponent proxy
-      <*> initialize_ proxy
-
-  learnOverlap_ overlap alchemy (HCons c tail) = do
-    whenJustM (validateOverlap overlap alchemy c) $ \e ->
+         , Component (ComponentData all updated) m c
+         , AlchemyLearn m all remaining (c ': updated)
+         ) => AlchemyLearn m all (c ': remaining) updated where
+  learnOverlapRecursively overlap all (HCons c remaining) updated = do
+    let partiallyValidated = PartiallyValidated @all @updated (_components all)
+    whenJustM (validateOverlap overlap partiallyValidated c) $ \e ->
       throwError e
 
-    c'    <- componentLearnOverlap overlap alchemy c
-    tail' <- learnOverlap_ overlap alchemy tail
+    let partiallyUpdated = PartiallyUpdated
+                           { _oldData = _components all
+                           , _newData = updated }
 
-    return $ HCons c' tail'
+    c' <- componentLearnOverlap overlap partiallyUpdated c
+    remaining' <-
+      learnOverlapRecursively overlap all remaining (HCons c' updated)
+
+    return $ HCons c' remaining'
