@@ -19,7 +19,7 @@ import           AlchemyComponent.Component
 import qualified AlchemyComponent.Component                  as Component
 import           AlchemyComponent.IngredientEffectsComponent
     ( IngredientEffectsComponent, updatedEffectsOf )
-import           AlchemyData
+import           AlchemyTypes
     ( IngredientName, Overlap (Overlap) )
 import           Data.Function
     ( (&) )

@@ -17,7 +17,7 @@ import           AlchemyComponent.Component                  as Component
 import qualified AlchemyComponent.Component                  as Component
 import           AlchemyComponent.IngredientEffectsComponent
     ( IngredientEffectsComponent, effectsOf )
-import           AlchemyData
+import           AlchemyTypes
     ( EffectName, IngredientName, Overlap (Overlap) )
 import           Data.Map.Strict
     ( Map )

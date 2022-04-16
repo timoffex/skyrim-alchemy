@@ -45,7 +45,7 @@ module AlchemyComponent.Component
   ) where
 
 
-import           AlchemyData
+import           AlchemyTypes
     ( Overlap )
 import qualified Control.Algebra              as Algebra
 import           Control.Carrier.Error.Either

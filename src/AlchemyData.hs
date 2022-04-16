@@ -39,6 +39,13 @@ module AlchemyData
   ) where
 
 
+import           AlchemyTypes
+    ( EffectName
+    , IngredientName
+    , Overlap (Overlap)
+    , effectName
+    , ingredientName
+    )
 import qualified BinaryRelation               as BR
 import           Control.Algebra
     ( Has )
@@ -82,35 +89,6 @@ import           Data.UPair
 import           PairMap
     ( PairMap )
 import qualified PairMap                      as PairMap
-
-
-newtype IngredientName
-  = IngredientName T.Text
-  deriving ( Eq, Ord )
-
-newtype EffectName
-  = EffectName T.Text
-  deriving ( Eq, Ord )
-
-
-data Overlap
-  = Overlap IngredientName IngredientName (Set EffectName)
-  deriving ( Eq, Ord )
-
-
--- Let these names print in title case
-instance Show IngredientName where
-  show = T.unpack . T.toTitle . coerce
-instance Show EffectName where
-  show = T.unpack . T.toTitle . coerce
-
-
--- Ignore case in names
-ingredientName :: T.Text -> IngredientName
-ingredientName = IngredientName . T.toLower
-
-effectName :: T.Text -> EffectName
-effectName = EffectName . T.toLower
 
 
 data AlchemyData

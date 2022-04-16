@@ -14,7 +14,7 @@ module AlchemyComponent.IngredientEffectsComponent
 
 
 import qualified AlchemyComponent.Component as Component
-import           AlchemyData
+import           AlchemyTypes
     ( EffectName, IngredientName, Overlap (Overlap) )
 import           BinaryRelation
     ( BinaryRelation )

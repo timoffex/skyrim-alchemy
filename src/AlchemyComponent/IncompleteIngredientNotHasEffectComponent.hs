@@ -23,7 +23,7 @@ import           AlchemyComponent.IncompleteIngredientOverlapsComponent
     ( IncompleteIngredientOverlapsComponent
     , knownOverlapsOfIncompleteIngredientsWith
     )
-import           AlchemyData
+import           AlchemyTypes
     ( EffectName, IngredientName, Overlap (Overlap) )
 import           BinaryRelation
     ( BinaryRelation )
