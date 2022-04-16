@@ -5,7 +5,6 @@
 
 module AlchemyComponent.IngredientEffectsComponent
   ( IngredientEffectsComponent
-  , HasIngredientEffectsComponent
 
   , effectsOf
   , allKnownEffects
@@ -46,31 +45,28 @@ data IngredientEffectsComponent
       -- component is updated (unless it duplicates a bunch of logic).
     }
 
-type HasIngredientEffectsComponent alchemy =
-  Component.Has IngredientEffectsComponent alchemy
-
 
 -- | Gets the known effects of the ingredient.
 effectsOf
-  :: HasIngredientEffectsComponent alchemy
+  :: Component.Has IngredientEffectsComponent alchemy
   => IngredientName -> alchemy -> Set EffectName
 effectsOf ing = BR.byLeft ing . _ingHasEffectRelation . Component.get
 
 -- | Gets the set of all effects that are at least on one ingredient.
 allKnownEffects
-  :: HasIngredientEffectsComponent alchemy
+  :: Component.Has IngredientEffectsComponent alchemy
   => alchemy -> Set EffectName
 allKnownEffects = BR.rights . _ingHasEffectRelation . Component.get
 
 -- | Gets the set of all ingredients for which at least one effect is known.
 allIngredientsWithEffects
-  :: HasIngredientEffectsComponent alchemy
+  :: Component.Has IngredientEffectsComponent alchemy
   => alchemy -> Set IngredientName
 allIngredientsWithEffects = BR.lefts . _ingHasEffectRelation . Component.get
 
 -- | The set of ingredients for which all effects are known.
 isCompleted
-  :: HasIngredientEffectsComponent alchemy
+  :: Component.Has IngredientEffectsComponent alchemy
   => IngredientName
   -> alchemy
   -> Bool
@@ -78,7 +74,7 @@ isCompleted ing = Set.member ing . allCompletedIngredients
 
 -- | The set of ingredients with 4 known effects.
 allCompletedIngredients
-  :: HasIngredientEffectsComponent alchemy
+  :: Component.Has IngredientEffectsComponent alchemy
   => alchemy
   -> Set IngredientName
 allCompletedIngredients = _completedIngredients . Component.get

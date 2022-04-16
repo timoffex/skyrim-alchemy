@@ -7,7 +7,6 @@
 
 module AlchemyComponent.IncompleteIngredientOverlapsComponent
   ( IncompleteIngredientOverlapsComponent
-  , HasIncompleteIngredientOverlapsComponent
 
   , overlapBetweenIncompleteIngredients
   ) where
@@ -38,25 +37,20 @@ import qualified PairMap                                     as PairMap
 -- Requires 'IngredientEffectsComponent'.
 newtype IncompleteIngredientOverlapsComponent =
     IncompleteIngredientOverlapsComponent
-      (PairMap IngredientName (Set EffectName))
-
-type HasIncompleteIngredientOverlapsComponent alchemy =
-  Component.Has IncompleteIngredientOverlapsComponent alchemy
-
-getComponent alchemy =
-  let IncompleteIngredientOverlapsComponent pm = Component.get alchemy
-  in pm
+      { getPairMap :: PairMap IngredientName (Set EffectName) }
 
 
 -- | Gets the overlap between two incomplete ingredients if known.
 overlapBetweenIncompleteIngredients
-  :: HasIncompleteIngredientOverlapsComponent alchemy
+  :: Component.Has IncompleteIngredientOverlapsComponent alchemy
   => IngredientName
   -> IngredientName
   -> alchemy
   -> Maybe (Set EffectName)
 overlapBetweenIncompleteIngredients ing1 ing2 =
-  PairMap.lookupPair (pair ing1 ing2) . getComponent
+  PairMap.lookupPair (pair ing1 ing2)
+  . getPairMap
+  . Component.get
 
 
 instance ( Monad m
@@ -94,7 +88,7 @@ validate
     existingOverlap = PairMap.lookupPair (pair ing1 ing2) knownOverlaps
     existingOverlapEffects = let Just effects = existingOverlap in effects
     overlapExists = isJust existingOverlap &&
-                    (existingOverlapEffects != effects)
+                    not (existingOverlapEffects == effects)
     overlapExistsError = OverlapValidationError $
         "A different overlap between " <>
         T.pack (show ing1) <> " and " <> T.pack (show ing2) <>
