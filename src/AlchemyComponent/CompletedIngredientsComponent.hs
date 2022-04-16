@@ -9,6 +9,8 @@ module AlchemyComponent.CompletedIngredientsComponent
 
   , isCompleted
   , allCompletedIngredients
+
+  , isCompletedAfterUpdate
   ) where
 
 
@@ -42,6 +44,15 @@ isCompleted
   -> alchemy
   -> Bool
 isCompleted ing = Set.member ing . _completedIngredients . Component.get
+
+-- | Whether the ingredient became complete after the component updated.
+isCompletedAfterUpdate
+  :: Component.HasUpdated CompletedIngredientsComponent alchemy
+  => IngredientName
+  -> alchemy
+  -> Bool
+isCompletedAfterUpdate ing
+  = Set.member ing . _completedIngredients . Component.getUpdated
 
 -- | The set of all ingredients with all 4 effects known.
 allCompletedIngredients

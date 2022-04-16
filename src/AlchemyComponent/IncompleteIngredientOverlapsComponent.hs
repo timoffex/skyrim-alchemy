@@ -1,4 +1,3 @@
-{-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -9,6 +8,7 @@ module AlchemyComponent.IncompleteIngredientOverlapsComponent
   ( IncompleteIngredientOverlapsComponent
 
   , overlapBetweenIncompleteIngredients
+  , knownOverlapsOfIncompleteIngredientsWith
   ) where
 
 
@@ -19,6 +19,8 @@ import           AlchemyComponent.IngredientEffectsComponent
     ( IngredientEffectsComponent, effectsOf )
 import           AlchemyData
     ( EffectName, IngredientName, Overlap (Overlap) )
+import           Data.Map.Strict
+    ( Map )
 import           Data.Maybe
     ( isJust )
 import           Data.Set
@@ -51,6 +53,17 @@ overlapBetweenIncompleteIngredients ing1 ing2 =
   PairMap.lookupPair (pair ing1 ing2)
   . getPairMap
   . Component.get
+
+
+-- | Gets all known overlaps of the given ingredient with incomplete
+-- ingredients.
+knownOverlapsOfIncompleteIngredientsWith
+  :: Component.Has IncompleteIngredientOverlapsComponent alchemy
+  => IngredientName
+  -> alchemy
+  -> Map IngredientName (Set EffectName)
+knownOverlapsOfIncompleteIngredientsWith ing =
+  PairMap.lookup ing . getPairMap . Component.get
 
 
 instance ( Monad m
