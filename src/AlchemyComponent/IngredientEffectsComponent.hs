@@ -79,9 +79,15 @@ instance
     ( Monad m
     ) => Component.Component alchemy m IngredientEffectsComponent where
   initializeComponent _ = return $ IngredientEffectsComponent BR.empty
+  componentLearnEffect ing eff _ ingredientEffects =
+    return $ insertEffect ing eff ingredientEffects
   componentLearnOverlap overlap _ ingredientEffects =
     return $ insertOverlap overlap ingredientEffects
 
+insertEffect ing eff
+    = IngredientEffectsComponent
+    . BR.insert ing eff
+    . _ingHasEffectRelation
 
 insertOverlap
     (Overlap ing1 ing2 effects)

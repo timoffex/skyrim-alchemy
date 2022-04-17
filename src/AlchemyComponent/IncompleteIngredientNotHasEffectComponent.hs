@@ -18,7 +18,7 @@ import           AlchemyComponent.Component
     ( AlchemyHas
     , AlchemyHasBefore
     , Component
-    , OverlapValidationError (OverlapValidationError)
+    , ValidationError (ValidationError)
     )
 import qualified AlchemyComponent.Component                             as Component
 import           AlchemyComponent.IncompleteIngredientOverlapsComponent
@@ -30,6 +30,14 @@ import           AlchemyTypes
 import           BinaryRelation
     ( BinaryRelation )
 import qualified BinaryRelation                                         as BR
+import qualified Control.Algebra                                        as Algebra
+import           Control.Carrier.State.Strict
+    ( execState )
+import           Control.Effect.Error
+    ( throwError )
+import qualified Control.Effect.State                                   as State
+import           Control.Monad
+    ( forM_ )
 import           Data.Function
     ( (&) )
 import qualified Data.Map.Strict                                        as Map
@@ -87,7 +95,7 @@ ing `incompleteDoesNotHave` eff
 
 
 
-instance ( Monad m
+instance ( Algebra.Algebra sig m
          , AlchemyHas IncompleteIngredientOverlapsComponent alchemy
          , AlchemyHasBefore CompletedIngredientsComponent alchemy )
     => Component alchemy m IncompleteIngredientNotHasEffectComponent
@@ -96,61 +104,64 @@ instance ( Monad m
     initializeComponent _ = return $
       IncompleteIngredientNotHasEffectComponent BR.empty
 
-    validateOverlap overlap alchemy component
-      = return $ validate overlap alchemy component
+    componentLearnEffect ing eff alchemy component =
+      do
+        validateNewEffect ing eff component
+        learnEffect ing eff alchemy component
 
     componentLearnOverlap overlap alchemy component
-      = return $ learn overlap alchemy component
+      = learn overlap alchemy component
 
 
-validate (Overlap ing1 ing2 effects) _ component
-  | ing1CannotHaveEffect = Just $ ing1CannotHaveEffectError
-  | ing2CannotHaveEffect = Just $ ing2CannotHaveEffectError
-  | otherwise                = Nothing
+validateNewEffect ing eff component
+  | ingNotHasEffect = throwError ingNotHasEffectError
+  | otherwise       = return ()
   where
-    nonEffects ing = BR.byLeft ing $ _ingNotHasEffRelation component
+    ingNotHasEffect = BR.check ing eff $ _ingNotHasEffRelation component
+    ingNotHasEffectError = ValidationError $
+      "Ingredient " <> T.pack (show ing) <> " cannot have effect " <>
+      T.pack (show eff) <> " because a contradicting overlap is known."
 
-    ing1BadEffects = effects `Set.intersection` nonEffects ing1
-    ing2BadEffects = effects `Set.intersection` nonEffects ing2
-
-    ing1CannotHaveEffect = not (Set.null ing1BadEffects)
-    ing2CannotHaveEffect = not (Set.null ing2BadEffects)
-
-    ing1CannotHaveEffectError = makeError ing1 ing1BadEffects
-    ing2CannotHaveEffectError = makeError ing2 ing2BadEffects
-
-    -- TODO: It would be slightly nicer to print the contradicting overlap
-    makeError ing badEffects = OverlapValidationError $
-      "Ingredient " <> T.pack (show ing) <> " cannot have effects " <>
-      T.pack (show $ Set.toList badEffects) <> " because a contradicting" <>
-      " overlap is known."
-
-
-learn (Overlap ing1 ing2 effects) alchemy component
-    = IncompleteIngredientNotHasEffectComponent $
-        _ingNotHasEffRelation component
-          & updateOverlappingIngredients ing1
-          & updateOverlappingIngredients ing2
-          & removeIfNewlyComplete ing1
-          & removeIfNewlyComplete ing2
+learnEffect ing eff alchemy component =
+  do
+    validateNewEffect ing eff component
+    return $ IncompleteIngredientNotHasEffectComponent $
+      _ingNotHasEffRelation component
+        & updateOverlappingIngredients
+        & removeIfNewlyComplete
   where
 
     -- For all other incomplete ingredients overlapping with @ing@, the newly
     -- learned effects of @ing@ are non-effects, since otherwise they would
     -- have been in the original overlap and therefore would have already been
     -- known.
-    updateOverlappingIngredients ing ingNotHasEffRelation
+    updateOverlappingIngredients ingNotHasEffRelation
       = Map.foldlWithKey'
           updateNonEffects
           ingNotHasEffRelation
           (knownOverlapsOfIncompleteIngredientsWith ing alchemy)
     updateNonEffects ingNotHasEffRelation incompleteIng knownOverlap
-      = Set.foldl'
-          (\br nonEffect -> BR.insert incompleteIng nonEffect br)
-          ingNotHasEffRelation
-          (effects `Set.difference` knownOverlap)
+      = if Set.member eff knownOverlap
+        then ingNotHasEffRelation
+        else BR.insert incompleteIng eff ingNotHasEffRelation
 
-    removeIfNewlyComplete ing
+    removeIfNewlyComplete
       = if isCompletedAfterUpdate ing alchemy
         then BR.deleteLeft ing
         else id
+
+learn (Overlap ing1 ing2 effects) alchemy component
+  = execState component $ do
+      forM_ effects $ \effect -> do
+        modifyM $ learnEffect ing1 effect alchemy
+        modifyM $ learnEffect ing2 effect alchemy
+
+
+modifyM
+  :: Algebra.Has (State.State s) sig m
+  => (s -> m s)
+  -> m ()
+modifyM action = do
+  state <- State.get
+  updated <- action state
+  State.put updated

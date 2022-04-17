@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0b338e30f3237ab7ffd4fe030017b8b5c8040ec1e60f4981de54d8291c6df508
+-- hash: dcf2796626d8d05dbeae5ec7c256907b57a5022e0e53d9f9e9b7cbfa0cdc114b
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -45,7 +45,6 @@ library
     , fused-effects-th >=0.1.0.2
     , lens >=4.19.2
     , megaparsec
-    , mtl
     , multi-containers >=0.1.1
     , readline >=1.0.3.0
     , split >=0.2.3.3
@@ -70,7 +69,6 @@ executable skyrim-alchemy-exe
     , fused-effects-th >=0.1.0.2
     , lens >=4.19.2
     , megaparsec
-    , mtl
     , multi-containers >=0.1.1
     , readline >=1.0.3.0
     , skyrim-alchemy
@@ -101,7 +99,6 @@ test-suite skyrim-alchemy-test
     , hspec
     , lens >=4.19.2
     , megaparsec
-    , mtl
     , multi-containers >=0.1.1
     , readline >=1.0.3.0
     , skyrim-alchemy

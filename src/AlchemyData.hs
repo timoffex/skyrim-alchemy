@@ -44,10 +44,7 @@ import           AlchemyComponent.CompletedIngredientsComponent
     ( CompletedIngredientsComponent )
 import qualified AlchemyComponent.CompletedIngredientsComponent             as Component
 import           AlchemyComponent.Component
-    ( AlchemyComponents
-    , IngredientEffectValidationError
-    , OverlapValidationError
-    )
+    ( AlchemyComponents, ValidationError )
 import qualified AlchemyComponent.Component                                 as Component
 import           AlchemyComponent.IncompleteIngredientNotHasEffectComponent
     ( IncompleteIngredientNotHasEffectComponent )
@@ -295,7 +292,7 @@ learnIngredient ing = undefined -- TODO: Implement (update empty ings)
 
 
 -- TODO: Remove wrapper type
-type InconsistentEffect = IngredientEffectValidationError
+type InconsistentEffect = ValidationError
 
 
 -- | Associates the effect to the ingredient.
@@ -314,7 +311,7 @@ learnIngredientEffect ing eff =
     put newAlchemyData
 
 -- TODO: Remove wrapper type
-type InconsistentOverlap = OverlapValidationError
+type InconsistentOverlap = ValidationError
 
 learnOverlap
   :: ( Has (State AlchemyData) sig m

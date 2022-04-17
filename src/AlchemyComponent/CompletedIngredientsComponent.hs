@@ -21,8 +21,6 @@ import           AlchemyComponent.IngredientEffectsComponent
     ( IngredientEffectsComponent, updatedEffectsOf )
 import           AlchemyTypes
     ( IngredientName, Overlap (Overlap) )
-import           Data.Function
-    ( (&) )
 import           Data.Set
     ( Set )
 import qualified Data.Set                                    as Set
@@ -71,17 +69,19 @@ instance ( Monad m
 
     -- TODO: Validate that ingredients are not already completed
 
+    componentLearnEffect ing _ alchemy component
+      = return $ updateIngIfCompleted ing alchemy component
+
     componentLearnOverlap overlap alchemy component
       = return $ learn overlap alchemy component
 
+updateIngIfCompleted ing alchemy
+  = CompletedIngredientsComponent
+  . ( if Set.size (updatedEffectsOf ing alchemy) >= 4
+      then Set.insert ing
+      else id )
+  . _completedIngredients
 
-learn (Overlap ing1 ing2 _) alchemy component
-    = CompletedIngredientsComponent newCompletedIngredients
-  where
-    isIng1Completed = Set.size (updatedEffectsOf ing1 alchemy) >= 4
-    isIng2Completed = Set.size (updatedEffectsOf ing2 alchemy) >= 4
-
-    newCompletedIngredients =
-      _completedIngredients component
-        & (if isIng1Completed then Set.insert ing1 else id)
-        . (if isIng2Completed then Set.insert ing2 else id)
+learn (Overlap ing1 ing2 _) alchemy
+    = updateIngIfCompleted ing1 alchemy
+    . updateIngIfCompleted ing2 alchemy

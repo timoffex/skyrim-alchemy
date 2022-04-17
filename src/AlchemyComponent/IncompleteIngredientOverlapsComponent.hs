@@ -14,12 +14,15 @@ module AlchemyComponent.IncompleteIngredientOverlapsComponent
 
 
 import           AlchemyComponent.Component                  as Component
-    ( AlchemyHas, OverlapValidationError (OverlapValidationError) )
+    ( AlchemyHas, ValidationError (ValidationError) )
 import qualified AlchemyComponent.Component                  as Component
 import           AlchemyComponent.IngredientEffectsComponent
     ( IngredientEffectsComponent, effectsOf )
 import           AlchemyTypes
     ( EffectName, IngredientName, Overlap (Overlap) )
+import qualified Control.Algebra                             as Algebra
+import           Control.Effect.Error
+    ( throwError )
 import           Data.Map.Strict
     ( Map )
 import           Data.Maybe
@@ -79,18 +82,17 @@ knownOverlapsOfIncompleteIngredients
   = PairMap.assocs . getPairMap . Component.get
 
 
-instance ( Monad m
+instance ( Algebra.Algebra sig m
          , AlchemyHas IngredientEffectsComponent alchemy ) =>
     Component.Component alchemy m IncompleteIngredientOverlapsComponent
   where
     initializeComponent _ = return $
       IncompleteIngredientOverlapsComponent PairMap.empty
 
-    componentLearnOverlap overlap _ ingredientOverlaps =
-      return $ insertOverlap overlap ingredientOverlaps
-
-    validateOverlap overlap alchemy ingredientOverlaps =
-      return $ validate overlap alchemy ingredientOverlaps
+    componentLearnOverlap overlap alchemy ingredientOverlaps =
+      do
+        validate overlap alchemy ingredientOverlaps
+        return $ insertOverlap overlap ingredientOverlaps
 
 
 insertOverlap
@@ -105,17 +107,17 @@ validate
     (Overlap ing1 ing2 effects)
     alchemy
     (IncompleteIngredientOverlapsComponent knownOverlaps)
-  | overlapExists               = Just overlapExistsError
-  | overlapMissingEffects       = Just overlapMissingEffectsError
+  | overlapExists               = throwError overlapExistsError
+  | overlapMissingEffects       = throwError overlapMissingEffectsError
   -- TODO
-  -- | overlapHasImpossibleEffects = Just overlapHasImpossibleEffectsError
-  | otherwise                   = Nothing
+  -- | overlapHasImpossibleEffects = throwError overlapHasImpossibleEffectsError
+  | otherwise                   = return ()
   where
 
     existingOverlap = PairMap.lookupPair (pair ing1 ing2) knownOverlaps
     existingOverlapEffects = let Just effects = existingOverlap in effects
     overlapExists = isJust existingOverlap && existingOverlapEffects /= effects
-    overlapExistsError = OverlapValidationError $
+    overlapExistsError = ValidationError $
         "A different overlap between " <>
         T.pack (show ing1) <> " and " <> T.pack (show ing2) <>
         " is already recorded: " <> T.pack (show existingOverlapEffects)
@@ -123,7 +125,7 @@ validate
     effectsInCommon = Set.intersection (effectsOf ing1 alchemy)
                                        (effectsOf ing2 alchemy)
     overlapMissingEffects = not (effectsInCommon `Set.isSubsetOf` effects)
-    overlapMissingEffectsError = OverlapValidationError $
+    overlapMissingEffectsError = ValidationError $
         "Overlap does not include effects common to both ingredients: " <>
         T.pack (show $ Set.toList effectsInCommon)
 
