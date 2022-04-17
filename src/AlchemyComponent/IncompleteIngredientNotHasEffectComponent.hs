@@ -157,6 +157,7 @@ learn (Overlap ing1 ing2 effects) alchemy component
         modifyM $ learnEffect ing2 effect alchemy
 
 
+-- TODO: Move this to a common place or find way to avoid using it
 modifyM
   :: Algebra.Has (State.State s) sig m
   => (s -> m s)

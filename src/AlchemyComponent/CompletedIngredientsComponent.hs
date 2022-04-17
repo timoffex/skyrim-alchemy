@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 
@@ -15,15 +16,21 @@ module AlchemyComponent.CompletedIngredientsComponent
 
 
 import           AlchemyComponent.Component
-    ( AlchemyHasBefore, Component )
+    ( AlchemyHasBefore, Component, ValidationError (ValidationError) )
 import qualified AlchemyComponent.Component                  as Component
 import           AlchemyComponent.IngredientEffectsComponent
     ( IngredientEffectsComponent, updatedEffectsOf )
 import           AlchemyTypes
     ( IngredientName, Overlap (Overlap) )
+import qualified Control.Algebra                             as Algebra
+import           Control.Effect.Error
+    ( throwError )
+import           Control.Monad
+    ( when, (>=>) )
 import           Data.Set
     ( Set )
 import qualified Data.Set                                    as Set
+import qualified Data.Text                                   as T
 
 
 -- | Component that keeps track of ingredients with all 4 effects known.
@@ -60,7 +67,7 @@ allCompletedIngredients
 allCompletedIngredients = _completedIngredients . Component.get
 
 
-instance ( Monad m
+instance ( Algebra.Algebra sig m
          , AlchemyHasBefore IngredientEffectsComponent alchemy )
     => Component alchemy m CompletedIngredientsComponent
   where
@@ -70,18 +77,22 @@ instance ( Monad m
     -- TODO: Validate that ingredients are not already completed
 
     componentLearnEffect ing _ alchemy component
-      = return $ updateIngIfCompleted ing alchemy component
+      = updateIngIfCompleted ing alchemy component
 
     componentLearnOverlap overlap alchemy component
-      = return $ learn overlap alchemy component
+      = learn overlap alchemy component
 
-updateIngIfCompleted ing alchemy
-  = CompletedIngredientsComponent
-  . ( if Set.size (updatedEffectsOf ing alchemy) >= 4
-      then Set.insert ing
-      else id )
-  . _completedIngredients
+updateIngIfCompleted ing alchemy component = do
+  when (Set.size (updatedEffectsOf ing alchemy) > 4) $
+    throwError $ ValidationError $
+      "Too many effects on ingredient " <> T.pack (show ing)
+
+  return $ CompletedIngredientsComponent
+         $ ( if Set.size (updatedEffectsOf ing alchemy) == 4
+             then Set.insert ing
+             else id )
+         $ _completedIngredients component
 
 learn (Overlap ing1 ing2 _) alchemy
     = updateIngIfCompleted ing1 alchemy
-    . updateIngIfCompleted ing2 alchemy
+    >=> updateIngIfCompleted ing2 alchemy
