@@ -26,6 +26,8 @@ import           AlchemyInteraction
 import           CLI
     ( Command (runCommand), parseCommand )
 import           Control.Algebra
+    ( run )
+import           Control.Algebra
     ( Handler )
 import           Control.Carrier.Error.Either
     ( ErrorC )
@@ -95,7 +97,7 @@ runAlchemyData =
   runM @IO .
   expectingNoErrors @InconsistentEffect .
   expectingNoErrors @InconsistentOverlap .
-  void . execState emptyAlchemyData
+  void . execState (run emptyAlchemyData)
 
 
 expectingNoErrors

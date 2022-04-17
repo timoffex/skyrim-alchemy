@@ -28,6 +28,8 @@ import           AlchemyData
     , nonEffectsOf
     , overlapBetween
     )
+import           Control.Algebra
+    ( run )
 import           Control.Carrier.Error.Either
     ( ErrorC, runError )
 import           Control.Carrier.Error.Extra
@@ -222,7 +224,7 @@ runAlchemyData =
   runM @IO .
   expectingNoErrors @InconsistentEffect .
   expectingNoErrors @InconsistentOverlap .
-  void . execState emptyAlchemyData
+  void . execState (run emptyAlchemyData)
 
 
 expectingNoErrors
