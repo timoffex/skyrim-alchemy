@@ -44,7 +44,10 @@ import           AlchemyComponent.CompletedIngredientsComponent
     ( CompletedIngredientsComponent )
 import qualified AlchemyComponent.CompletedIngredientsComponent             as Component
 import           AlchemyComponent.Component
-    ( AlchemyComponents, OverlapValidationError )
+    ( AlchemyComponents
+    , IngredientEffectValidationError
+    , OverlapValidationError
+    )
 import qualified AlchemyComponent.Component                                 as Component
 import           AlchemyComponent.IncompleteIngredientNotHasEffectComponent
     ( IncompleteIngredientNotHasEffectComponent )
@@ -72,8 +75,6 @@ import           Control.Effect.Error
     ( Error )
 import           Control.Effect.State
     ( State )
-import           Data.Coerce
-    ( coerce )
 import           Data.Foldable
     ( Foldable (fold) )
 import           Data.Function
@@ -86,7 +87,6 @@ import           Data.Maybe
 import           Data.Set
     ( Set )
 import qualified Data.Set                                                   as Set
-import qualified Data.Text                                                  as T
 import           Data.UPair
     ( UPair, distinctPairs, pair, unpair )
 
@@ -294,9 +294,8 @@ learnIngredient
 learnIngredient ing = undefined -- TODO: Implement (update empty ings)
 
 
-newtype InconsistentEffect = InconsistentEffectReason T.Text
-instance Show InconsistentEffect where
-  show = T.unpack . coerce
+-- TODO: Remove wrapper type
+type InconsistentEffect = IngredientEffectValidationError
 
 
 -- | Associates the effect to the ingredient.
@@ -307,7 +306,12 @@ learnIngredientEffect
   => IngredientName
   -> EffectName
   -> m ()
-learnIngredientEffect = undefined -- TODO: Implement
+learnIngredientEffect ing eff =
+  do
+    oldAlchemyData <- get @AlchemyData
+    newAlchemyData <- rethrowing id $
+      Component.learnIngredientEffect ing eff oldAlchemyData
+    put newAlchemyData
 
 -- TODO: Remove wrapper type
 type InconsistentOverlap = OverlapValidationError

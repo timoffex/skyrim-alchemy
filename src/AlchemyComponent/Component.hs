@@ -42,11 +42,12 @@ module AlchemyComponent.Component
   , HasInitialized (..)
 
   , OverlapValidationError (..)
+  , IngredientEffectValidationError (..)
   ) where
 
 
 import           AlchemyTypes
-    ( Overlap )
+    ( EffectName, IngredientName, Overlap )
 import qualified Control.Algebra              as Algebra
 import           Control.Carrier.Error.Either
     ( ErrorC, throwError )
@@ -75,6 +76,13 @@ data AlchemyComponents cs = AlchemyComponents { _components :: !(HList cs) }
 class Alchemy m alchemy where
   -- | Creates an empty instance representing zero alchemy knowledge.
   initialize :: m alchemy
+
+  -- | Updates the data structure by associating the effect with the ingredient.
+  learnIngredientEffect
+    :: IngredientName
+    -> EffectName
+    -> alchemy
+    -> ErrorC IngredientEffectValidationError m alchemy
 
   -- | Updates the data structure by processing the result of combining
   -- ingredients.
@@ -109,6 +117,18 @@ class Monad m => Component alchemy m c where
     -> m (Maybe OverlapValidationError)
   validateOverlap _ _ _ = return Nothing
 
+  -- | Updates the component by processing the fact that an ingredient has
+  -- an effect.
+  --
+  -- Defaults to returning the original data structure unchanged.
+  componentLearnEffect
+    :: IngredientName
+    -> EffectName
+    -> PartiallyUpdated alchemy
+    -> c
+    -> ErrorC IngredientEffectValidationError m c
+  componentLearnEffect _ _ _ c = return c
+
   -- | Updates the component by processing the result of combining some
   -- ingredients.
   --
@@ -123,6 +143,10 @@ class Monad m => Component alchemy m c where
 
 newtype OverlapValidationError = OverlapValidationError T.Text
 instance Show OverlapValidationError where
+  show = T.unpack . coerce
+
+newtype IngredientEffectValidationError = IngredientEffectValidationError T.Text
+instance Show IngredientEffectValidationError where
   show = T.unpack . coerce
 
 
@@ -235,6 +259,11 @@ instance ( Algebra.Algebra sig m
     initialize
       = AlchemyComponents <$>
           initializeRecursively (Proxy @cs) HEmpty
+
+    learnIngredientEffect ing eff alchemy
+      = AlchemyComponents <$>
+          learnEffectRecursively ing eff alchemy (_components alchemy) HEmpty
+
     learnOverlap overlap alchemy
       = AlchemyComponents <$>
           learnOverlapRecursively overlap alchemy (_components alchemy) HEmpty
@@ -242,6 +271,14 @@ instance ( Algebra.Algebra sig m
 class AlchemyInitialize m (all :: [*]) remaining initialized where
   initializeRecursively :: Proxy all -> HList initialized -> m (HList remaining)
 class AlchemyLearn m all remaining updated where
+  learnEffectRecursively
+    :: Algebra.Algebra sig m
+    => IngredientName
+    -> EffectName
+    -> AlchemyComponents all
+    -> HList remaining
+    -> HList updated
+    -> ErrorC IngredientEffectValidationError m (HList remaining)
   learnOverlapRecursively
     :: Algebra.Algebra sig m
     => Overlap
@@ -267,11 +304,24 @@ instance ( Monad m
 
 
 instance Monad m => AlchemyLearn m all '[] cs where
+  learnEffectRecursively _ _ _ _ _ = return HEmpty
   learnOverlapRecursively _ _ _ _ = return HEmpty
 
 instance ( Component (ComponentData all updated) m c
          , AlchemyLearn m all remaining (c ': updated)
          ) => AlchemyLearn m all (c ': remaining) updated where
+  -- TODO: Merge these implementations
+
+  learnEffectRecursively ing eff all (HCons c remaining) updated = do
+    let partiallyUpdated = PartiallyUpdated
+                           { _oldData = _components all
+                           , _newData = updated }
+    c' <- componentLearnEffect ing eff partiallyUpdated c
+    remaining' <-
+      learnEffectRecursively ing eff all remaining (HCons c' updated)
+
+    return $ HCons c' remaining'
+
   learnOverlapRecursively overlap all (HCons c remaining) updated = do
     let partiallyValidated = PartiallyValidated @all @updated (_components all)
     whenJustM (lift $ validateOverlap overlap partiallyValidated c) $ \e ->
