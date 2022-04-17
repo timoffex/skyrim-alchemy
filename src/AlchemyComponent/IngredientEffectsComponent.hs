@@ -5,7 +5,9 @@
 module AlchemyComponent.IngredientEffectsComponent
   ( IngredientEffectsComponent
 
+  , hasEffect
   , effectsOf
+  , ingredientsWith
   , allKnownEffects
   , allIngredientsWithEffects
 
@@ -46,6 +48,19 @@ updatedEffectsOf
   => IngredientName -> alchemy -> Set EffectName
 updatedEffectsOf ing
   = BR.byLeft ing . _ingHasEffectRelation . Component.getUpdated
+
+-- | Returns whether the ingredient is known to have the effect.
+hasEffect
+  :: Component.Has IngredientEffectsComponent alchemy
+  => IngredientName -> EffectName -> alchemy -> Bool
+ing `hasEffect` eff
+  = Set.member eff . effectsOf ing
+
+-- | Gets the set of ingredients known to have an effect.
+ingredientsWith
+  :: Component.Has IngredientEffectsComponent alchemy
+  => EffectName -> alchemy -> Set IngredientName
+ingredientsWith eff = BR.byRight eff . _ingHasEffectRelation . Component.get
 
 -- | Gets the set of all effects that are at least on one ingredient.
 allKnownEffects

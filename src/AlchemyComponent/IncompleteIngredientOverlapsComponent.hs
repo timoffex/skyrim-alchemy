@@ -9,6 +9,7 @@ module AlchemyComponent.IncompleteIngredientOverlapsComponent
 
   , overlapBetweenIncompleteIngredients
   , knownOverlapsOfIncompleteIngredientsWith
+  , knownOverlapsOfIncompleteIngredients
   ) where
 
 
@@ -28,13 +29,16 @@ import           Data.Set
 import qualified Data.Set                                    as Set
 import qualified Data.Text                                   as T
 import           Data.UPair
+    ( UPair )
+import           Data.UPair
     ( pair )
 import           PairMap
     ( PairMap )
 import qualified PairMap                                     as PairMap
 
 
--- | Component that keeps track of the known effects for each ingredient.
+-- | Component that keeps track of the known overlaps between incomplete
+-- ingredients.
 --
 -- Requires 'IngredientEffectsComponent'.
 newtype IncompleteIngredientOverlapsComponent =
@@ -49,21 +53,30 @@ overlapBetweenIncompleteIngredients
   -> IngredientName
   -> alchemy
   -> Maybe (Set EffectName)
-overlapBetweenIncompleteIngredients ing1 ing2 =
-  PairMap.lookupPair (pair ing1 ing2)
-  . getPairMap
-  . Component.get
+overlapBetweenIncompleteIngredients ing1 ing2
+  = PairMap.lookupPair (pair ing1 ing2)
+    . getPairMap
+    . Component.get
 
 
--- | Gets all known overlaps of the given ingredient with incomplete
--- ingredients.
+-- | Gets all known overlaps of the given incomplete ingredient with other
+-- incomplete ingredients.
 knownOverlapsOfIncompleteIngredientsWith
   :: Component.Has IncompleteIngredientOverlapsComponent alchemy
   => IngredientName
   -> alchemy
   -> Map IngredientName (Set EffectName)
-knownOverlapsOfIncompleteIngredientsWith ing =
-  PairMap.lookup ing . getPairMap . Component.get
+knownOverlapsOfIncompleteIngredientsWith ing
+  = PairMap.lookup ing . getPairMap . Component.get
+
+
+-- | Gets all known overlaps where at least one ingredient is incomplete.
+knownOverlapsOfIncompleteIngredients
+  :: Component.Has IncompleteIngredientOverlapsComponent alchemy
+  => alchemy
+  -> [(UPair IngredientName, (Set EffectName))]
+knownOverlapsOfIncompleteIngredients
+  = PairMap.assocs . getPairMap . Component.get
 
 
 instance ( Monad m
@@ -83,6 +96,7 @@ instance ( Monad m
 insertOverlap
     (Overlap ing1 ing2 effects)
     (IncompleteIngredientOverlapsComponent initialData) =
+  -- TODO: Remove overlaps where at least one ingredient is completed!
   IncompleteIngredientOverlapsComponent $
       PairMap.insertPair (pair ing1 ing2) effects initialData
 
@@ -100,8 +114,7 @@ validate
 
     existingOverlap = PairMap.lookupPair (pair ing1 ing2) knownOverlaps
     existingOverlapEffects = let Just effects = existingOverlap in effects
-    overlapExists = isJust existingOverlap &&
-                    not (existingOverlapEffects == effects)
+    overlapExists = isJust existingOverlap && existingOverlapEffects /= effects
     overlapExistsError = OverlapValidationError $
         "A different overlap between " <>
         T.pack (show ing1) <> " and " <> T.pack (show ing2) <>

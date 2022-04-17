@@ -49,9 +49,11 @@ import           AlchemyTypes
     ( Overlap )
 import qualified Control.Algebra              as Algebra
 import           Control.Carrier.Error.Either
-    ( Error, throwError )
+    ( ErrorC, throwError )
 import           Control.Monad.Extra
     ( whenJustM )
+import           Control.Monad.Trans
+    ( lift )
 import           Data.Coerce
     ( coerce )
 import           Data.HList
@@ -76,7 +78,10 @@ class Alchemy m alchemy where
 
   -- | Updates the data structure by processing the result of combining
   -- ingredients.
-  learnOverlap :: Overlap -> alchemy -> m alchemy
+  learnOverlap
+    :: Overlap
+    -> alchemy
+    -> ErrorC OverlapValidationError m alchemy
 
 
 
@@ -221,7 +226,7 @@ instance HList.Has c preceding
     getInitialized = HList.get . _initialized
 
 
-instance ( Functor m
+instance ( Algebra.Algebra sig m
          , AlchemyInitialize m cs cs '[]
          , AlchemyLearn m cs cs '[]
          )
@@ -238,11 +243,12 @@ class AlchemyInitialize m (all :: [*]) remaining initialized where
   initializeRecursively :: Proxy all -> HList initialized -> m (HList remaining)
 class AlchemyLearn m all remaining updated where
   learnOverlapRecursively
-    :: Overlap
+    :: Algebra.Algebra sig m
+    => Overlap
     -> AlchemyComponents all
     -> HList remaining
     -> HList updated
-    -> m (HList remaining)
+    -> ErrorC OverlapValidationError m (HList remaining)
 
 
 instance Monad m => AlchemyInitialize m all '[] cs where
@@ -263,20 +269,19 @@ instance ( Monad m
 instance Monad m => AlchemyLearn m all '[] cs where
   learnOverlapRecursively _ _ _ _ = return HEmpty
 
-instance ( Algebra.Has (Error OverlapValidationError) sig m
-         , Component (ComponentData all updated) m c
+instance ( Component (ComponentData all updated) m c
          , AlchemyLearn m all remaining (c ': updated)
          ) => AlchemyLearn m all (c ': remaining) updated where
   learnOverlapRecursively overlap all (HCons c remaining) updated = do
     let partiallyValidated = PartiallyValidated @all @updated (_components all)
-    whenJustM (validateOverlap overlap partiallyValidated c) $ \e ->
+    whenJustM (lift $ validateOverlap overlap partiallyValidated c) $ \e ->
       throwError e
 
     let partiallyUpdated = PartiallyUpdated
                            { _oldData = _components all
                            , _newData = updated }
 
-    c' <- componentLearnOverlap overlap partiallyUpdated c
+    c' <- lift $ componentLearnOverlap overlap partiallyUpdated c
     remaining' <-
       learnOverlapRecursively overlap all remaining (HCons c' updated)
 

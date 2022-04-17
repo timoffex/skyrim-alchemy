@@ -112,7 +112,8 @@ ingredientFile = do
   let alch = run .
              runError @AD.InconsistentOverlap .
              runError @AD.InconsistentEffect .
-             execState AD.emptyAlchemyData $ do
+             -- TODO: This forces the monad used in the program to be Identity
+             execState (run AD.emptyAlchemyData) $ do
         forM_ ings $ \(IngredientDef ingName effs) -> do
           AD.learnIngredient ingName
           mapM_ (AD.learnIngredientEffect ingName) effs

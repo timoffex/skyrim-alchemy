@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -39,6 +40,21 @@ module AlchemyData
   ) where
 
 
+import           AlchemyComponent.CompletedIngredientsComponent
+    ( CompletedIngredientsComponent )
+import qualified AlchemyComponent.CompletedIngredientsComponent             as Component
+import           AlchemyComponent.Component
+    ( AlchemyComponents, OverlapValidationError )
+import qualified AlchemyComponent.Component                                 as Component
+import           AlchemyComponent.IncompleteIngredientNotHasEffectComponent
+    ( IncompleteIngredientNotHasEffectComponent )
+import qualified AlchemyComponent.IncompleteIngredientNotHasEffectComponent as Component
+import           AlchemyComponent.IncompleteIngredientOverlapsComponent
+    ( IncompleteIngredientOverlapsComponent )
+import qualified AlchemyComponent.IncompleteIngredientOverlapsComponent     as Component
+import           AlchemyComponent.IngredientEffectsComponent
+    ( IngredientEffectsComponent )
+import qualified AlchemyComponent.IngredientEffectsComponent                as Component
 import           AlchemyTypes
     ( EffectName
     , IngredientName
@@ -46,97 +62,54 @@ import           AlchemyTypes
     , effectName
     , ingredientName
     )
-import qualified BinaryRelation               as BR
 import           Control.Algebra
-    ( Has )
-import           Control.Carrier.Error.Either
-    ( throwError )
+    ( Algebra, Has )
 import           Control.Carrier.Error.Extra
     ( rethrowing )
 import           Control.Carrier.State.Strict
-    ( gets )
-import           Control.Carrier.Throw.Either
-    ( runThrow )
+    ( get, put )
 import           Control.Effect.Error
     ( Error )
-import           Control.Effect.Lens
-    ( (%=) )
 import           Control.Effect.State
     ( State )
-import           Control.Lens
-    ( makeLenses, view, (&), (<&>), (^.) )
-import           Control.Monad
-    ( forM_, unless, when )
-import           Control.Monad.Extra
-    ( whenM )
 import           Data.Coerce
     ( coerce )
-import           Data.Either.Extra
-    ( fromEither )
 import           Data.Foldable
     ( Foldable (fold) )
+import           Data.Function
+    ( (&) )
 import           Data.List
     ( foldl1' )
-import qualified Data.Map.Strict              as Map
+import qualified Data.Map.Strict                                            as Map
 import           Data.Maybe
     ( isJust )
 import           Data.Set
     ( Set )
-import qualified Data.Set                     as Set
-import qualified Data.Text                    as T
+import qualified Data.Set                                                   as Set
+import qualified Data.Text                                                  as T
 import           Data.UPair
     ( UPair, distinctPairs, pair, unpair )
-import           PairMap
-    ( PairMap )
-import qualified PairMap                      as PairMap
 
 
-data AlchemyData
-  = AlchemyData
-    { _ingHasEffRelation
-      :: BR.BinaryRelation IngredientName EffectName
-    -- ^ The "ingredient has effect" relation between ingredients and
-    -- effects.
-
-    , _incompleteIngNotHasEffRelation
-      :: BR.BinaryRelation IngredientName EffectName
-    -- ^ The "ingredient does not have effect" relation between
-    -- _incomplete_ ingredients and effects.
-
-    , _completedIngredients
-      :: Set IngredientName
-    -- ^ The set of all ingredients with all 4 effects known.
-
-    , _emptyIngredients
-      :: Set IngredientName
-    -- ^ The set of ingredients for which no effects are known.
-    --
-    -- Despite not knowing any of an ingredient's effects, we might
-    -- still have information about the ingredient in the form of
-    -- empty overlaps with other ingredients.
-
-    , _fullOverlapNonComplete
-      :: PairMap IngredientName (Set EffectName)
-    -- ^ A map from pairs of incomplete ingredients to the set of
-    -- ingredients they have in common, as gleaned from actually
-    -- combining them.
-    }
-$( makeLenses ''AlchemyData )
+type AlchemyData
+  = AlchemyComponents '[ IngredientEffectsComponent
+                       , CompletedIngredientsComponent
+                       , IncompleteIngredientOverlapsComponent
+                       , IncompleteIngredientNotHasEffectComponent ]
 
 
 -- | An initial 'AlchemyData' that contains no information about
 -- effects or ingredients.
-emptyAlchemyData :: AlchemyData
-emptyAlchemyData = AlchemyData BR.empty BR.empty Set.empty Set.empty PairMap.empty
+emptyAlchemyData :: Algebra sig m => m AlchemyData
+emptyAlchemyData = Component.initialize
 
 -- | Whether the ingredient is completed (i.e. has all 4 effects).
 isCompleted :: IngredientName -> AlchemyData -> Bool
-isCompleted ing alchemyData =
-  Set.member ing (alchemyData^.completedIngredients)
+isCompleted = Component.isCompleted
 
 -- | Gets the set of all completed ingredients.
 allCompletedIngredients :: AlchemyData -> Set IngredientName
-allCompletedIngredients = view completedIngredients
+allCompletedIngredients = Component.allCompletedIngredients
 
 -- | Gets the set of all incomplete ingredients.
 allIncompleteIngredients :: AlchemyData -> Set IngredientName
@@ -148,19 +121,21 @@ allIncompleteIngredients alchemyData =
 allKnownIngredients :: AlchemyData -> Set IngredientName
 allKnownIngredients alchemyData =
   Set.union
-    (BR.lefts $ alchemyData^.ingHasEffRelation)
-    (alchemyData^.emptyIngredients)
+    (Component.allIngredientsWithEffects alchemyData)
+    undefined
+    -- TODO
+    -- (Component.emptyIngredients alchemyData)
 
 -- | Gets the set of all known effects.
 allKnownEffects :: AlchemyData -> Set EffectName
-allKnownEffects = BR.rights . view ingHasEffRelation
+allKnownEffects = Component.allKnownEffects
 
 -- | Gets all known overlaps between pairs of ingredients.
 allKnownOverlaps
   :: AlchemyData
   -> [(UPair IngredientName, Set EffectName)]
 allKnownOverlaps alchemyData =
-  PairMap.assocs (alchemyData^.fullOverlapNonComplete) ++
+  Component.knownOverlapsOfIncompleteIngredients alchemyData ++
 
   -- Overlaps between completed and incomplete ingredients
   [ (pair ing1 ing2, overlap)
@@ -180,7 +155,7 @@ allKnownOverlaps alchemyData =
 
 -- | Gets the known effects of the ingredient.
 effectsOf :: IngredientName -> AlchemyData -> Set EffectName
-effectsOf ing = BR.byLeft ing . view ingHasEffRelation
+effectsOf = Component.effectsOf
 
 effectsOfIngredientIn :: AlchemyData -> IngredientName -> Set EffectName
 effectsOfIngredientIn = flip effectsOf
@@ -189,27 +164,25 @@ effectsOfIngredientIn = flip effectsOf
 doesNotHave :: IngredientName -> EffectName -> AlchemyData -> Bool
 doesNotHave ing eff alchemyData
   | isCompleted ing alchemyData = not (hasEffect ing eff alchemyData)
-  | otherwise                   = useRelation
-  where
-    useRelation = BR.check ing eff $ alchemyData^.incompleteIngNotHasEffRelation
+  | otherwise                   = (ing `Component.incompleteDoesNotHave` eff)
+                                  alchemyData
 
 -- | Returns whether an ingredient is known to have an effect.
 hasEffect :: IngredientName -> EffectName -> AlchemyData -> Bool
-hasEffect ing eff alchemyData =
-  BR.check ing eff (alchemyData^.ingHasEffRelation)
+hasEffect = Component.hasEffect
 
 -- | Gets the known non-effects of the ingredient.
 nonEffectsOf :: IngredientName -> AlchemyData -> Set EffectName
 nonEffectsOf ing alchemyData
   | isIngCompleted = Set.difference allEffs ingEffs
-  | otherwise      = effsNotContainingNonComplete
+  | otherwise      = nonEffectsOfIncomplete
   where
     isIngCompleted = isCompleted ing alchemyData
     allEffs = allKnownEffects alchemyData
     ingEffs = effectsOf ing alchemyData
 
-    effsNotContainingNonComplete =
-      BR.byLeft ing $ alchemyData^.incompleteIngNotHasEffRelation
+    nonEffectsOfIncomplete
+      = Component.knownNonEffectsOfIncompleteIngredient ing alchemyData
 
 nonEffectsOfIngredientIn :: AlchemyData -> IngredientName -> Set EffectName
 nonEffectsOfIngredientIn = flip nonEffectsOf
@@ -223,14 +196,14 @@ ingredientsNotContaining eff alchemyData =
     completeIngsNotContainingEff
   where
     incompleteIngsNotContainingEff =
-      BR.byRight eff $ alchemyData^.incompleteIngNotHasEffRelation
+      Component.incompleteIngredientsWithoutEffect eff alchemyData
     completeIngsNotContainingEff =
-      flip Set.filter (alchemyData^.completedIngredients) $ \ing ->
-        not (BR.check ing eff $ alchemyData^.ingHasEffRelation)
+      Set.filter (\ing -> not (hasEffect ing eff alchemyData))
+                 (allCompletedIngredients alchemyData)
 
 -- | Gets the set of ingredients known to contain an effect.
 ingredientsWith :: EffectName -> AlchemyData -> Set IngredientName
-ingredientsWith eff = BR.byRight eff . view ingHasEffRelation
+ingredientsWith = Component.ingredientsWith
 
 ingredientsWithEffectIn :: AlchemyData -> EffectName -> Set IngredientName
 ingredientsWithEffectIn = flip ingredientsWith
@@ -238,12 +211,11 @@ ingredientsWithEffectIn = flip ingredientsWith
 -- | Gets the set of ingredients known to contain any of the effects.
 ingredientsWithAnyOf :: Set EffectName -> AlchemyData -> Set IngredientName
 ingredientsWithAnyOf effs alchemyData =
-  Set.unions (Set.toList effs <&> \eff ->
-              ingredientsWith eff alchemyData)
+  Set.unions (fmap (\eff -> ingredientsWith eff alchemyData)
+                   (Set.toList effs))
 
 
--- | Gets all ingredients known to not overlap with the given
--- ingredient.
+-- | Gets all ingredients known to not overlap with the given ingredient.
 ingredientsNotOverlappingWith
   :: IngredientName
   -> AlchemyData
@@ -270,7 +242,7 @@ ingredientsNotOverlappingWith ing alchemyData
         (allCompletedIngredients alchemyData)
 
     incompleteIngsNotOverlappingIng =
-       PairMap.lookup ing (alchemyData^.fullOverlapNonComplete) &
+       Component.knownOverlapsOfIncompleteIngredientsWith ing alchemyData &
        Map.filter Set.null &
        Map.keys &
        Set.fromList
@@ -293,8 +265,8 @@ overlapBetween
 overlapBetween ing1 ing2 alchemyData
   | isCompleted1 = overlapWithCompleted ing1 ing2
   | isCompleted2 = overlapWithCompleted ing2 ing1
-  | otherwise = PairMap.lookupPair (pair ing1 ing2)
-                                   (alchemyData^.fullOverlapNonComplete)
+  | otherwise = Component.overlapBetweenIncompleteIngredients
+                  ing1 ing2 alchemyData
   where
     isCompleted1 = isCompleted ing1 alchemyData
     isCompleted2 = isCompleted ing2 alchemyData
@@ -319,11 +291,7 @@ learnIngredient
   :: ( Has (State AlchemyData) sig m )
   => IngredientName
   -> m ()
-learnIngredient ing =
-  whenM isIngredientUnknown $
-    emptyIngredients %= Set.insert ing
-  where
-    isIngredientUnknown = gets $ Set.null . effectsOf ing
+learnIngredient ing = undefined -- TODO: Implement (update empty ings)
 
 
 newtype InconsistentEffect = InconsistentEffectReason T.Text
@@ -339,74 +307,10 @@ learnIngredientEffect
   => IngredientName
   -> EffectName
   -> m ()
-learnIngredientEffect ing eff = fmap fromEither . runThrow @() $
-  do
-    let exitEarly = throwError ()
+learnIngredientEffect = undefined -- TODO: Implement
 
-    -- Do nothing if the ingredient already has the effect
-    whenM (gets $ ing `hasEffect` eff)
-      exitEarly
-
-    ----------------------------------------------------------------------------
-    -- Avoid contradicting old information
-    ----------------------------------------------------------------------------
-
-    -- Check ingredient isn't already complete
-    whenM (gets $ isCompleted ing) $
-      throwError $ InconsistentEffectReason
-        "Ingredient is already completed"
-
-    -- Check ingredient isn't known to /not/ contain the effect
-    whenM (gets $ Set.member ing . ingredientsNotContaining eff) $
-      throwError $ InconsistentEffectReason
-        "Ingredient was believed to not contain the effect"
-
-    ----------------------------------------------------------------------------
-    -- Update negatives for incomplete ings overlapping with ing
-    ----------------------------------------------------------------------------
-    -- Every incomplete ingredient whose overlap with ing does not
-    -- contain eff is now known to not contain eff
-    ----------------------------------------------------------------------------
-    do
-      overlapsWithIng <-
-        gets $ PairMap.lookup ing . view fullOverlapNonComplete
-
-      forM_ (Map.assocs overlapsWithIng) $ \(otherIng, overlap) ->
-        when (Set.notMember eff overlap) $
-          incompleteIngNotHasEffRelation %= BR.insert otherIng eff
-
-
-    ----------------------------------------------------------------------------
-    -- Update completed & overlap maps if the ingredient became completed
-    ----------------------------------------------------------------------------
-    isNewlyComplete <- do
-      newIngEffs <- gets $ Set.insert eff . effectsOf ing
-      return $ Set.size newIngEffs == 4
-    when isNewlyComplete $ do
-      -- Add completed ingredient to completed set
-      completedIngredients %= Set.insert ing
-
-      -- Remove completed ingredient from maps that should not have
-      -- completed ingredients
-      fullOverlapNonComplete %= PairMap.delete ing
-      incompleteIngNotHasEffRelation %= BR.deleteLeft ing
-
-    ----------------------------------------------------------------------------
-    -- Record positive relation between ing and eff
-    ----------------------------------------------------------------------------
-    ingHasEffRelation %= BR.insert ing eff
-    emptyIngredients %= Set.delete ing
-
-
-data InconsistentOverlap
-  = InconsistentOverlapReason T.Text
-  | InconsistentOverlapBadEffects InconsistentEffect
-instance Show InconsistentOverlap where
-  show = \case
-    InconsistentOverlapReason t     -> T.unpack t
-    InconsistentOverlapBadEffects e -> show e
-
-
+-- TODO: Remove wrapper type
+type InconsistentOverlap = OverlapValidationError
 
 learnOverlap
   :: ( Has (State AlchemyData) sig m
@@ -416,100 +320,9 @@ learnOverlap
   -> IngredientName
   -> Set EffectName
   -> m ()
-learnOverlap ing1 ing2 effs = fmap fromEither . runThrow @() $
+learnOverlap ing1 ing2 effs =
   do
-    let exitEarly = throwError ()
-
-    -- Do nothing if this overlap is already known
-    whenM ((== Just effs) <$> gets (overlapBetween ing1 ing2))
-      exitEarly
-
-    ----------------------------------------------------------------------------
-    -- Avoid contradicting pre-existing information
-    ----------------------------------------------------------------------------
-    -- The overlap is "consistent" if and only if it includes all
-    -- effects common to both ingredients and does not include any
-    -- effects that either of the ingredients is known to not have,
-    -- and the overlap between the ingredients is not already known.
-    ----------------------------------------------------------------------------
-
-    -- Ensure overlap doesn't already exist
-    unlessNothingM (gets $ overlapBetween ing1 ing2) $ \overlap ->
-      throwError $ InconsistentOverlapReason $
-        "Overlap between " <>
-        T.pack (show ing1) <> " and " <> T.pack (show ing2) <>
-        " already known: " <> T.pack (show overlap)
-
-    -- Ensure overlap includes common effects
-    do
-      effs1 <- gets $ effectsOf ing1
-      effs2 <- gets $ effectsOf ing2
-      let commonEffects = Set.intersection effs1 effs2
-      unless (commonEffects `Set.isSubsetOf` effs) $ do
-        throwError $ InconsistentOverlapReason $
-          "Overlap does not include effects common to both ingredients: " <>
-          T.pack (show $ Set.toList commonEffects)
-
-    -- Ensure overlap excludes impossible effects
-    do
-      let isImpossible eff = do
-            impossibleIngs <- gets $ ingredientsNotContaining eff
-            return $
-              Set.member ing1 impossibleIngs ||
-              Set.member ing2 impossibleIngs
-      forM_ effs $ \eff ->
-        whenM (isImpossible eff) $
-          throwError $ InconsistentOverlapReason $
-            "Overlap includes effect " <>
-            T.pack (show eff) <>
-            " that's known to not exist on one of the ingredients."
-
-    ----------------------------------------------------------------------------
-    -- Learn the new effects and ingredients
-    ----------------------------------------------------------------------------
-
-    -- Learn the ingredients
-    mapM_ learnIngredient [ing1, ing2]
-
-    -- Learn the effects on both ingredients
-    rethrowing InconsistentOverlapBadEffects $
-      forM_ effs $ \eff -> do
-        learnIngredientEffect ing1 eff
-        learnIngredientEffect ing2 eff
-
-
-    ----------------------------------------------------------------------------
-    -- Update negatives and overlap maps
-    ----------------------------------------------------------------------------
-    let updateNegatives incompleteIng otherIng = do
-          otherIngEffs <- gets $ effectsOf otherIng
-          forM_ otherIngEffs $ \eff -> do
-            when (Set.notMember eff effs) $
-              incompleteIngNotHasEffRelation %= BR.insert incompleteIng eff
-
-    isCompleted1 <- gets (isCompleted ing1)
-    isCompleted2 <- gets (isCompleted ing2)
-
-    -- Update the effect negatives for noncompleted ingredients
-    unless isCompleted1 $ updateNegatives ing1 ing2
-    unless isCompleted2 $ updateNegatives ing2 ing1
-
-    -- Update overlap map if both ingredients are not completed
-    when (not isCompleted1 && not isCompleted2) $
-      fullOverlapNonComplete %= PairMap.insertPair (pair ing1 ing2) effs
-
-
---------------------------------------------------------------------------------
--- Utilities
---------------------------------------------------------------------------------
-
-unlessNothingM
-  :: Monad m
-  => m (Maybe a)
-  -> (a -> m ())
-  -> m ()
-unlessNothingM action f =
-  action >>= \case
-    Just a -> f a
-    Nothing -> return ()
-
+    oldAlchemyData <- get @AlchemyData
+    newAlchemyData <- rethrowing id $
+      Component.learnOverlap (Overlap ing1 ing2 effs) oldAlchemyData
+    put newAlchemyData

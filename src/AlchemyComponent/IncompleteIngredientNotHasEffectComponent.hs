@@ -7,6 +7,8 @@
 module AlchemyComponent.IncompleteIngredientNotHasEffectComponent
   ( IncompleteIngredientNotHasEffectComponent
   , knownNonEffectsOfIncompleteIngredient
+  , incompleteIngredientsWithoutEffect
+  , incompleteDoesNotHave
   ) where
 
 
@@ -60,6 +62,28 @@ knownNonEffectsOfIncompleteIngredient
   -> Set EffectName
 knownNonEffectsOfIncompleteIngredient ing
   = BR.byLeft ing . _ingNotHasEffRelation . Component.get
+
+
+-- | Returns the set of incomplete ingredients known to not have an effect.
+incompleteIngredientsWithoutEffect
+  :: Component.Has IncompleteIngredientNotHasEffectComponent alchemy
+  => EffectName
+  -> alchemy
+  -> Set IngredientName
+incompleteIngredientsWithoutEffect eff
+  = BR.byRight eff . _ingNotHasEffRelation . Component.get
+
+-- | Returns whether an incomplete ingredient is known to not have an effect.
+--
+-- For completed ingredients, this always returns False.
+incompleteDoesNotHave
+  :: Component.Has IncompleteIngredientNotHasEffectComponent alchemy
+  => IngredientName
+  -> EffectName
+  -> alchemy
+  -> Bool
+ing `incompleteDoesNotHave` eff
+  = BR.check ing eff . _ingNotHasEffRelation . Component.get
 
 
 
