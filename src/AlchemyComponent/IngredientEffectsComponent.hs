@@ -32,9 +32,9 @@ import Data.Set
 import qualified Data.Set as Set
 
 -- | Component that keeps track of the known effects for each ingredient.
-data IngredientEffectsComponent = IngredientEffectsComponent
+newtype IngredientEffectsComponent = IngredientEffectsComponent
   { -- | Relation "ingredient contains effect".
-    _ingHasEffectRelation :: !(BinaryRelation IngredientName EffectName)
+    _ingHasEffectRelation :: BinaryRelation IngredientName EffectName
   }
 
 -- | Gets the known effects of the ingredient.

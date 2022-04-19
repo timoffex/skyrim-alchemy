@@ -62,7 +62,7 @@ import qualified Data.Text as T
 --
 -- This does not track this information for completed ingredients because there
 -- these ingredients are known to not have all but a few effects.
-data IncompleteIngredientNotHasEffectComponent = IncompleteIngredientNotHasEffectComponent
+newtype IncompleteIngredientNotHasEffectComponent = IncompleteIngredientNotHasEffectComponent
   {_ingNotHasEffRelation :: BinaryRelation IngredientName EffectName}
 
 -- | Returns the set of effects that an incomplete ingredient is known not

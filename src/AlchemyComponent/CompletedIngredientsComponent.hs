@@ -44,8 +44,8 @@ import qualified Data.Text as T
 --
 -- This requires 'IngredientEffectsComponent' to appear earlier in the
 -- component list.
-data CompletedIngredientsComponent = CompletedIngredientsComponent
-  {_completedIngredients :: !(Set IngredientName)}
+newtype CompletedIngredientsComponent = CompletedIngredientsComponent
+  {_completedIngredients :: Set IngredientName}
 
 -- | Whether the ingredient has all 4 effects known.
 isCompleted ::
