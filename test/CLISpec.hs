@@ -13,8 +13,7 @@ module CLISpec
 import           AlchemyData
     ( AlchemyData
     , EffectName
-    , InconsistentEffect
-    , InconsistentOverlap
+    , ValidationError
     , IngredientName
     , effectName
     , emptyAlchemyData
@@ -89,14 +88,12 @@ spec = do
 
 runAlchemyData
   :: StateC AlchemyData (
-     ErrorC InconsistentOverlap (
-     ErrorC InconsistentEffect (
-     LiftC IO))) a
+     ErrorC ValidationError (
+     LiftC IO)) a
   -> IO ()
 runAlchemyData =
   runM @IO .
-  expectingNoErrors @InconsistentEffect .
-  expectingNoErrors @InconsistentOverlap .
+  expectingNoErrors @ValidationError .
   void . execState (run emptyAlchemyData)
 
 

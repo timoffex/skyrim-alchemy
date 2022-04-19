@@ -173,7 +173,7 @@ minimumPotentialEffectsCoverOf ing = do
 pleaseListEffects
   :: Has (State AD.AlchemyData) sig m
   => m (S.Set AD.EffectName)
-pleaseListEffects = gets AD.allKnownEffects
+pleaseListEffects = gets @AD.AlchemyData AD.allKnownEffects
 
 pleaseListIngredients
   :: Has (State AD.AlchemyData) sig m
@@ -207,7 +207,7 @@ pleaseListEffectsOf
   :: Has (State AD.AlchemyData) sig m
   => AD.IngredientName
   -> m (S.Set AD.EffectName)
-pleaseListEffectsOf = gets . AD.effectsOf
+pleaseListEffectsOf = gets @AD.AlchemyData . AD.effectsOf
 
 pleaseListNonEffectsOf
   :: Has (State AD.AlchemyData) sig m
@@ -233,7 +233,7 @@ tryLearnOverlap
   -> S.Set AD.EffectName
   -> m ()
 tryLearnOverlap ing1 ing2 effs =
-  rethrowing @AD.InconsistentOverlap (T.pack . show) $
+  rethrowing @AD.ValidationError (T.pack . show) $
   AD.learnOverlap ing1 ing2 effs
 
 
@@ -244,5 +244,5 @@ tryLearnIngredientEffect
   -> AD.EffectName
   -> m ()
 tryLearnIngredientEffect ing eff =
-  rethrowing @AD.InconsistentEffect (T.pack . show) $
+  rethrowing @AD.ValidationError (T.pack . show) $
   AD.learnIngredientEffect ing eff

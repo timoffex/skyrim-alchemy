@@ -11,8 +11,7 @@ module AlchemyDataSpec
 import           AlchemyData
     ( AlchemyData
     , EffectName
-    , InconsistentEffect
-    , InconsistentOverlap
+    , ValidationError
     , IngredientName
     , allCompletedIngredients
     , allKnownIngredients
@@ -83,7 +82,7 @@ spec = do
     learnIngredientEffect ing $ effectName "eff3"
     learnIngredientEffect ing $ effectName "eff4"
 
-    expectThrows @InconsistentEffect $
+    expectThrows @ValidationError $
       learnIngredientEffect ing $ effectName "eff5"
 
   it "ingredient with 4 effects is completed" $ runAlchemyData $ do
@@ -174,7 +173,7 @@ spec = do
     it "cannot learn overlap that contradicts the existing one" $
       runAlchemyData $ do
       learnOverlap wheat nirnroot S.empty
-      expectThrows @InconsistentOverlap $
+      expectThrows @ValidationError $
         learnOverlap wheat nirnroot $ S.fromList [restoreHealth]
 
     it "cannot learn overlap with an effect an ingredient is known not to have" $
@@ -185,7 +184,7 @@ spec = do
         S.fromList [restoreHealth, fortifyHealth]
 
       -- Butterfly Wing is known not to have Fortify Health at this point
-      expectThrows @InconsistentOverlap $
+      expectThrows @ValidationError $
         learnOverlap butterflyWing wheat $
           S.fromList [restoreHealth, fortifyHealth]
 
@@ -197,7 +196,7 @@ spec = do
         S.fromList [restoreHealth, fortifyHealth]
 
       -- Both have Restore Health, so overlap must include it
-      expectThrows @InconsistentOverlap $
+      expectThrows @ValidationError $
         learnOverlap butterflyWing wheat S.empty
 
     it "can learn overlap that is already known" $
@@ -216,14 +215,12 @@ spec = do
 
 runAlchemyData
   :: StateC AlchemyData (
-     ErrorC InconsistentOverlap (
-     ErrorC InconsistentEffect (
-     LiftC IO))) a
+     ErrorC ValidationError (
+     LiftC IO)) a
   -> IO ()
 runAlchemyData =
   runM @IO .
-  expectingNoErrors @InconsistentEffect .
-  expectingNoErrors @InconsistentOverlap .
+  expectingNoErrors @ValidationError .
   void . execState (run emptyAlchemyData)
 
 

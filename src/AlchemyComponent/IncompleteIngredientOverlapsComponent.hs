@@ -32,12 +32,10 @@ import           Data.Set
 import qualified Data.Set                                    as Set
 import qualified Data.Text                                   as T
 import           Data.UPair
-    ( UPair )
-import           Data.UPair
-    ( pair )
+    ( UPair, pair )
 import           PairMap
     ( PairMap )
-import qualified PairMap                                     as PairMap
+import qualified PairMap
 
 
 -- | Component that keeps track of the known overlaps between incomplete
@@ -110,7 +108,7 @@ validate
   | overlapExists               = throwError overlapExistsError
   | overlapMissingEffects       = throwError overlapMissingEffectsError
   -- TODO
-  -- | overlapHasImpossibleEffects = throwError overlapHasImpossibleEffectsError
+  -- overlapHasImpossibleEffects = throwError overlapHasImpossibleEffectsError
   | otherwise                   = return ()
   where
 

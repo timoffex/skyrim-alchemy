@@ -110,8 +110,7 @@ ingredientFile = do
   MP.eof
 
   let alch = run .
-             runError @AD.InconsistentOverlap .
-             runError @AD.InconsistentEffect .
+             runError @AD.ValidationError .
              -- TODO: This forces the monad used in the program to be Identity
              execState (run AD.emptyAlchemyData) $ do
         forM_ ings $ \(IngredientDef ingName effs) -> do
@@ -122,9 +121,8 @@ ingredientFile = do
           AD.learnOverlap ing1 ing2 effs
 
   case alch of
-    Left err              -> fail $ show err
-    Right (Left err)      -> fail $ show err
-    Right (Right success) -> return success
+    Left err      -> fail $ show err
+    Right success -> return success
 
 
 data IngredientDef
