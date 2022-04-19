@@ -1,15 +1,14 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE UndecidableInstances  #-}
-
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Defines a way of constructing a data structure that stores incoming alchemy
 -- information, such as the result of combining some ingredients.
@@ -29,43 +28,45 @@
 -- the known effects of each ingredient. (TODO: Why this abstraction is the
 -- best way to implement this)
 module AlchemyComponent.Component
-  ( AlchemyComponents
-  , Alchemy (..)
+  ( AlchemyComponents,
+    Alchemy (..),
+    Component (..),
+    IsAlchemyInformation (..),
+    AlchemyHas,
+    AlchemyHasBefore,
+    Has (..),
+    HasUpdated (..),
+    HasInitialized (..),
+    ValidationError (..),
+  )
+where
 
-  , Component (..)
-  , IsAlchemyInformation (..)
-  , AlchemyHas
-  , AlchemyHasBefore
-
-  , Has (..)
-  , HasUpdated (..)
-  , HasInitialized (..)
-
-  , ValidationError (..)
-  ) where
-
-
-import           AlchemyTypes
-    ( EffectName, IngredientName, Overlap )
-import qualified Control.Algebra              as Algebra
-import           Control.Carrier.Error.Either
-    ( ErrorC )
-import           Data.Coerce
-    ( coerce )
-import           Data.HList
-    ( HList (HCons, HEmpty) )
-import qualified Data.HList                   as HList
-import           Data.Proxy
-    ( Proxy (Proxy) )
-import qualified Data.Text                    as T
-
+import AlchemyTypes
+  ( EffectName,
+    IngredientName,
+    Overlap,
+  )
+import qualified Control.Algebra as Algebra
+import Control.Carrier.Error.Either
+  ( ErrorC,
+  )
+import Data.Coerce
+  ( coerce,
+  )
+import Data.HList
+  ( HList (HCons, HEmpty),
+  )
+import qualified Data.HList as HList
+import Data.Proxy
+  ( Proxy (Proxy),
+  )
+import qualified Data.Text as T
 
 -- | Information about Skyrim's alchemy, built from individual 'Component'
 -- types that track specific bits of information.
 --
 -- One can think of this as a record with a field for each type @c@ in @cs@.
-data AlchemyComponents cs = AlchemyComponents { _components :: !(HList cs) }
-
+data AlchemyComponents cs = AlchemyComponents {_components :: !(HList cs)}
 
 -- | Things you can do with 'AlchemyComponents'.
 class Alchemy m alchemy where
@@ -73,20 +74,18 @@ class Alchemy m alchemy where
   initialize :: m alchemy
 
   -- | Updates the data structure by associating the effect with the ingredient.
-  learnIngredientEffect
-    :: IngredientName
-    -> EffectName
-    -> alchemy
-    -> ErrorC ValidationError m alchemy
+  learnIngredientEffect ::
+    IngredientName ->
+    EffectName ->
+    alchemy ->
+    ErrorC ValidationError m alchemy
 
   -- | Updates the data structure by processing the result of combining
   -- ingredients.
-  learnOverlap
-    :: Overlap
-    -> alchemy
-    -> ErrorC ValidationError m alchemy
-
-
+  learnOverlap ::
+    Overlap ->
+    alchemy ->
+    ErrorC ValidationError m alchemy
 
 -- | Class for types that process the results of combining ingredients in
 -- Skyrim.
@@ -98,7 +97,6 @@ class Alchemy m alchemy where
 -- @m@ is the monad in which computations are done. 'Component' instances can
 -- restrict this to allow special effects in their functions.
 class Monad m => Component alchemy m c where
-
   -- | Creates an empty instance of the component representing zero knowledge.
   initializeComponent :: PartiallyInitialized alchemy -> m c
 
@@ -106,30 +104,29 @@ class Monad m => Component alchemy m c where
   -- an effect.
   --
   -- Defaults to returning the original data structure unchanged.
-  componentLearnEffect
-    :: IngredientName
-    -> EffectName
-    -> PartiallyUpdated alchemy
-    -> c
-    -> ErrorC ValidationError m c
+  componentLearnEffect ::
+    IngredientName ->
+    EffectName ->
+    PartiallyUpdated alchemy ->
+    c ->
+    ErrorC ValidationError m c
   componentLearnEffect _ _ _ c = return c
 
   -- | Updates the component by processing the result of combining some
   -- ingredients.
   --
   -- Defaults to returning the original data structure unchanged.
-  componentLearnOverlap
-    :: Overlap
-    -> PartiallyUpdated alchemy
-    -> c
-    -> ErrorC ValidationError m c
+  componentLearnOverlap ::
+    Overlap ->
+    PartiallyUpdated alchemy ->
+    c ->
+    ErrorC ValidationError m c
   componentLearnOverlap _ _ c = return c
 
-
 newtype ValidationError = ValidationError T.Text
+
 instance Show ValidationError where
   show = T.unpack . coerce
-
 
 -- | The data types used in the 'Component' class.
 class IsAlchemyInformation alchemy where
@@ -137,24 +134,24 @@ class IsAlchemyInformation alchemy where
   data PartiallyInitialized alchemy
   data PartiallyUpdated alchemy
 
-
 -- | Constraint for 'Component' instance declarations that declares a dependency
 -- on another component, without requiring that component to appear earlier
 -- in the list of components.
-type AlchemyHas c alchemy
-  = ( Has c (PartiallyUpdated alchemy)
-    , Has c (Snapshot alchemy) )
+type AlchemyHas c alchemy =
+  ( Has c (PartiallyUpdated alchemy),
+    Has c (Snapshot alchemy)
+  )
 
 -- | Like 'AlchemyHas', but additionally requires that the specified component
 -- appears before the current component.
 --
 -- This allows the component to use updated values from another component
 -- when initializing or updating.
-type AlchemyHasBefore c alchemy
-  = ( AlchemyHas c alchemy
-    , HasUpdated c (PartiallyUpdated alchemy)
-    , HasInitialized c (PartiallyInitialized alchemy) )
-
+type AlchemyHasBefore c alchemy =
+  ( AlchemyHas c alchemy,
+    HasUpdated c (PartiallyUpdated alchemy),
+    HasInitialized c (PartiallyInitialized alchemy)
+  )
 
 -- | Class that allows getting the value of a specific component in an
 -- alchemy data structure.
@@ -174,117 +171,123 @@ class HasUpdated c alchemyType where
 class HasInitialized c alchemyType where
   getInitialized :: alchemyType -> c
 
-
 --------------------------------------------------------------------------------
 -- Implementation details                                                     --
 --------------------------------------------------------------------------------
 
-
-
 data ComponentData (all :: [*]) (preceding :: [*])
 
 instance IsAlchemyInformation (ComponentData all preceding) where
-  type Snapshot (ComponentData all preceding)
-    = AlchemyComponents all
+  type
+    Snapshot (ComponentData all preceding) =
+      AlchemyComponents all
 
-  data PartiallyUpdated (ComponentData all preceding)
-    = PartiallyUpdated
-      { _oldData :: !(HList all)
-      , _newData :: !(HList preceding) }
+  data PartiallyUpdated (ComponentData all preceding) = PartiallyUpdated
+    { _oldData :: !(HList all),
+      _newData :: !(HList preceding)
+    }
 
-  data PartiallyInitialized (ComponentData all preceding)
-    = PartiallyInitialized
-      { _initialized :: !(HList preceding) }
+  data PartiallyInitialized (ComponentData all preceding) = PartiallyInitialized
+    {_initialized :: !(HList preceding)}
 
-
-
-instance HList.Has c cs
-    => Has c (AlchemyComponents cs)
+instance
+  HList.Has c cs =>
+  Has c (AlchemyComponents cs)
   where
-    get = HList.get . _components
+  get = HList.get . _components
 
-instance HList.Has c cs
-    => Has c (PartiallyUpdated (ComponentData cs preceding))
+instance
+  HList.Has c cs =>
+  Has c (PartiallyUpdated (ComponentData cs preceding))
   where
-    get = HList.get . _oldData
+  get = HList.get . _oldData
 
-instance HList.Has c preceding
-    => HasUpdated c (PartiallyUpdated (ComponentData cs preceding))
+instance
+  HList.Has c preceding =>
+  HasUpdated c (PartiallyUpdated (ComponentData cs preceding))
   where
-    getUpdated = HList.get . _newData
+  getUpdated = HList.get . _newData
 
-instance HList.Has c preceding
-    => HasInitialized c (PartiallyInitialized (ComponentData cs preceding))
+instance
+  HList.Has c preceding =>
+  HasInitialized c (PartiallyInitialized (ComponentData cs preceding))
   where
-    getInitialized = HList.get . _initialized
+  getInitialized = HList.get . _initialized
 
-
-instance ( Algebra.Algebra sig m
-         , AlchemyInitialize m cs cs '[]
-         , AlchemyLearn m cs cs '[]
-         )
-    => Alchemy m (AlchemyComponents cs)
+instance
+  ( Algebra.Algebra sig m,
+    AlchemyInitialize m cs cs '[],
+    AlchemyLearn m cs cs '[]
+  ) =>
+  Alchemy m (AlchemyComponents cs)
   where
-    initialize
-      = AlchemyComponents <$>
-          initializeRecursively (Proxy @cs) HEmpty
+  initialize =
+    AlchemyComponents
+      <$> initializeRecursively (Proxy @cs) HEmpty
 
-    learnIngredientEffect ing eff alchemy
-      = AlchemyComponents <$>
-          learnEffectRecursively ing eff alchemy (_components alchemy) HEmpty
+  learnIngredientEffect ing eff alchemy =
+    AlchemyComponents
+      <$> learnEffectRecursively ing eff alchemy (_components alchemy) HEmpty
 
-    learnOverlap overlap alchemy
-      = AlchemyComponents <$>
-          learnOverlapRecursively overlap alchemy (_components alchemy) HEmpty
+  learnOverlap overlap alchemy =
+    AlchemyComponents
+      <$> learnOverlapRecursively overlap alchemy (_components alchemy) HEmpty
 
 class AlchemyInitialize m (all :: [*]) remaining initialized where
   initializeRecursively :: Proxy all -> HList initialized -> m (HList remaining)
-class AlchemyLearn m all remaining updated where
-  learnEffectRecursively
-    :: Algebra.Algebra sig m
-    => IngredientName
-    -> EffectName
-    -> AlchemyComponents all
-    -> HList remaining
-    -> HList updated
-    -> ErrorC ValidationError m (HList remaining)
-  learnOverlapRecursively
-    :: Algebra.Algebra sig m
-    => Overlap
-    -> AlchemyComponents all
-    -> HList remaining
-    -> HList updated
-    -> ErrorC ValidationError m (HList remaining)
 
+class AlchemyLearn m all remaining updated where
+  learnEffectRecursively ::
+    Algebra.Algebra sig m =>
+    IngredientName ->
+    EffectName ->
+    AlchemyComponents all ->
+    HList remaining ->
+    HList updated ->
+    ErrorC ValidationError m (HList remaining)
+  learnOverlapRecursively ::
+    Algebra.Algebra sig m =>
+    Overlap ->
+    AlchemyComponents all ->
+    HList remaining ->
+    HList updated ->
+    ErrorC ValidationError m (HList remaining)
 
 instance Monad m => AlchemyInitialize m all '[] cs where
   initializeRecursively _ _ = return HEmpty
 
-instance ( Monad m
-         , Component (ComponentData all initialized) m c
-         , AlchemyInitialize m all remaining (c ': initialized) )
-    => AlchemyInitialize m all (c ': remaining) initialized
+instance
+  ( Monad m,
+    Component (ComponentData all initialized) m c,
+    AlchemyInitialize m all remaining (c ': initialized)
+  ) =>
+  AlchemyInitialize m all (c ': remaining) initialized
   where
-    initializeRecursively proxy initialized = do
-      c' <- initializeComponent $
+  initializeRecursively proxy initialized = do
+    c' <-
+      initializeComponent $
         PartiallyInitialized @all initialized
-      remaining' <- initializeRecursively proxy (HCons c' initialized)
-      return $ HCons c' remaining'
-
+    remaining' <- initializeRecursively proxy (HCons c' initialized)
+    return $ HCons c' remaining'
 
 instance Monad m => AlchemyLearn m all '[] cs where
   learnEffectRecursively _ _ _ _ _ = return HEmpty
   learnOverlapRecursively _ _ _ _ = return HEmpty
 
-instance ( Component (ComponentData all updated) m c
-         , AlchemyLearn m all remaining (c ': updated)
-         ) => AlchemyLearn m all (c ': remaining) updated where
+instance
+  ( Component (ComponentData all updated) m c,
+    AlchemyLearn m all remaining (c ': updated)
+  ) =>
+  AlchemyLearn m all (c ': remaining) updated
+  where
   -- TODO: Merge these implementations
 
   learnEffectRecursively ing eff all (HCons c remaining) updated = do
-    let partiallyUpdated = PartiallyUpdated
-                           { _oldData = _components all
-                           , _newData = updated }
+    let partiallyUpdated =
+          PartiallyUpdated
+            { _oldData = _components all,
+              _newData = updated
+            }
     c' <- componentLearnEffect ing eff partiallyUpdated c
     remaining' <-
       learnEffectRecursively ing eff all remaining (HCons c' updated)
@@ -292,9 +295,11 @@ instance ( Component (ComponentData all updated) m c
     return $ HCons c' remaining'
 
   learnOverlapRecursively overlap all (HCons c remaining) updated = do
-    let partiallyUpdated = PartiallyUpdated
-                           { _oldData = _components all
-                           , _newData = updated }
+    let partiallyUpdated =
+          PartiallyUpdated
+            { _oldData = _components all,
+              _newData = updated
+            }
 
     c' <- componentLearnOverlap overlap partiallyUpdated c
     remaining' <-

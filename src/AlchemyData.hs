@@ -1,9 +1,9 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module AlchemyData
   ( IngredientName,
@@ -39,44 +39,62 @@ module AlchemyData
   )
 where
 
-import qualified AlchemyComponent.CompletedIngredientsComponent             as Component
-import           AlchemyComponent.Component
-    ( AlchemyComponents, ValidationError )
-import qualified AlchemyComponent.Component                                 as Component
+import qualified AlchemyComponent.CompletedIngredientsComponent as Component
+import AlchemyComponent.Component
+  ( AlchemyComponents,
+    ValidationError,
+  )
+import qualified AlchemyComponent.Component as Component
 import qualified AlchemyComponent.IncompleteIngredientNotHasEffectComponent as Component
-import qualified AlchemyComponent.IncompleteIngredientOverlapsComponent     as Component
-import qualified AlchemyComponent.IngredientEffectsComponent                as Component
-import           AlchemyTypes
-    ( EffectName
-    , IngredientName
-    , Overlap (Overlap)
-    , effectName
-    , ingredientName
-    )
-import           Control.Algebra
-    ( Algebra, Has )
-import           Control.Carrier.Error.Extra
-    ( rethrowing )
-import           Control.Carrier.State.Strict
-    ( get, put )
-import           Control.Effect.Error
-    ( Error )
-import           Control.Effect.State
-    ( State )
-import           Data.Foldable
-    ( Foldable (fold) )
-import           Data.Function
-    ( (&) )
-import           Data.List
-    ( foldl1' )
-import qualified Data.Map.Strict                                            as Map
-import           Data.Maybe
-    ( isJust )
-import           Data.Set
-    ( Set )
-import qualified Data.Set                                                   as Set
-import           Data.UPair
-    ( UPair, distinctPairs, pair, unpair )
+import qualified AlchemyComponent.IncompleteIngredientOverlapsComponent as Component
+import qualified AlchemyComponent.IngredientEffectsComponent as Component
+import AlchemyTypes
+  ( EffectName,
+    IngredientName,
+    Overlap (Overlap),
+    effectName,
+    ingredientName,
+  )
+import Control.Algebra
+  ( Algebra,
+    Has,
+  )
+import Control.Carrier.Error.Extra
+  ( rethrowing,
+  )
+import Control.Carrier.State.Strict
+  ( get,
+    put,
+  )
+import Control.Effect.Error
+  ( Error,
+  )
+import Control.Effect.State
+  ( State,
+  )
+import Data.Foldable
+  ( Foldable (fold),
+  )
+import Data.Function
+  ( (&),
+  )
+import Data.List
+  ( foldl1',
+  )
+import qualified Data.Map.Strict as Map
+import Data.Maybe
+  ( isJust,
+  )
+import Data.Set
+  ( Set,
+  )
+import qualified Data.Set as Set
+import Data.UPair
+  ( UPair,
+    distinctPairs,
+    pair,
+    unpair,
+  )
 
 type AlchemyData =
   AlchemyComponents
@@ -208,10 +226,10 @@ ingredientsWithAnyOf effs alchemyData =
     )
 
 -- | Gets all ingredients known to not overlap with the given ingredient.
-ingredientsNotOverlappingWith
-  :: IngredientName
-  -> AlchemyData
-  -> Set IngredientName
+ingredientsNotOverlappingWith ::
+  IngredientName ->
+  AlchemyData ->
+  Set IngredientName
 ingredientsNotOverlappingWith ing alchemyData
   | isIngCompleted = ingsNotContainingIngEffs
   | otherwise = ingsNotOverlappingIncompleteIng
@@ -242,10 +260,10 @@ ingredientsNotOverlappingWith ing alchemyData
         & Set.fromList
 
 -- | Gets all ingredients that overlap with the given ingredient.
-ingredientsOverlappingWith
-  :: IngredientName
-  -> AlchemyData
-  -> Set IngredientName
+ingredientsOverlappingWith ::
+  IngredientName ->
+  AlchemyData ->
+  Set IngredientName
 ingredientsOverlappingWith ing alchemyData =
   Set.unions
     ( Set.map (ingredientsWithEffectIn alchemyData) $
@@ -253,11 +271,11 @@ ingredientsOverlappingWith ing alchemyData =
     )
 
 -- | Gets the full overlap between the two ingredients if it is known.
-overlapBetween
-  :: IngredientName
-  -> IngredientName
-  -> AlchemyData
-  -> Maybe (Set EffectName)
+overlapBetween ::
+  IngredientName ->
+  IngredientName ->
+  AlchemyData ->
+  Maybe (Set EffectName)
 overlapBetween ing1 ing2 alchemyData
   | isCompleted1 = overlapWithCompleted ing1 ing2
   | isCompleted2 = overlapWithCompleted ing2 ing1
@@ -285,21 +303,20 @@ overlapBetween ing1 ing2 alchemyData
             else Nothing
 
 -- | Acknowledges the existence of the ingredient.
-learnIngredient
-  :: ( Has (State AlchemyData) sig m )
-  => IngredientName
-  -> m ()
+learnIngredient ::
+  (Has (State AlchemyData) sig m) =>
+  IngredientName ->
+  m ()
 learnIngredient ing = undefined -- TODO: Implement (update empty ings)
 
-
 -- | Associates the effect to the ingredient.
-learnIngredientEffect
-  :: ( Has (State AlchemyData) sig m
-     , Has (Error ValidationError) sig m
-     )
-  => IngredientName
-  -> EffectName
-  -> m ()
+learnIngredientEffect ::
+  ( Has (State AlchemyData) sig m,
+    Has (Error ValidationError) sig m
+  ) =>
+  IngredientName ->
+  EffectName ->
+  m ()
 learnIngredientEffect ing eff =
   do
     oldAlchemyData <- get @AlchemyData
@@ -308,14 +325,14 @@ learnIngredientEffect ing eff =
         Component.learnIngredientEffect ing eff oldAlchemyData
     put newAlchemyData
 
-learnOverlap
-  :: ( Has (State AlchemyData) sig m
-     , Has (Error ValidationError) sig m
-     )
-  => IngredientName
-  -> IngredientName
-  -> Set EffectName
-  -> m ()
+learnOverlap ::
+  ( Has (State AlchemyData) sig m,
+    Has (Error ValidationError) sig m
+  ) =>
+  IngredientName ->
+  IngredientName ->
+  Set EffectName ->
+  m ()
 learnOverlap ing1 ing2 effs =
   do
     oldAlchemyData <- get @AlchemyData

@@ -2,34 +2,38 @@
 
 -- | Defines the command-line interface to this program.
 module CLI
-  ( parseCommand
-  , Cmd.runCommand
-  , Cmd.Command
-  ) where
+  ( parseCommand,
+    Cmd.runCommand,
+    Cmd.Command,
+  )
+where
 
-
-import qualified AlchemyData                as AD
-import           AlchemyInteraction
-    ( AlchemyInteraction, printError )
-import qualified Command                    as Cmd
-import           Control.Algebra
-    ( Has )
-import           Data.Functor
-    ( void )
-import qualified Data.Set                   as S
-import qualified Data.Text                  as T
-import qualified Data.Text.Lazy             as LT
-import           Data.Void
-    ( Void )
-import qualified Text.Megaparsec            as MP
-import qualified Text.Megaparsec.Char       as MP
+import qualified AlchemyData as AD
+import AlchemyInteraction
+  ( AlchemyInteraction,
+    printError,
+  )
+import qualified Command as Cmd
+import Control.Algebra
+  ( Has,
+  )
+import Data.Functor
+  ( void,
+  )
+import qualified Data.Set as S
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as LT
+import Data.Void
+  ( Void,
+  )
+import qualified Text.Megaparsec as MP
+import qualified Text.Megaparsec.Char as MP
 import qualified Text.Megaparsec.Char.Lexer as L
 
-
-parseCommand
-  :: Has AlchemyInteraction sig m
-  => String
-  -> m (Maybe Cmd.Command)
+parseCommand ::
+  Has AlchemyInteraction sig m =>
+  String ->
+  m (Maybe Cmd.Command)
 parseCommand s = case MP.parse commandDef "input" (LT.pack s) of
   Left err -> do
     printError (MP.errorBundlePretty err)
@@ -37,17 +41,19 @@ parseCommand s = case MP.parse commandDef "input" (LT.pack s) of
   Right cmd -> return $ Just cmd
 
 commandDef :: Parser Cmd.Command
-commandDef = MP.choice
-  [ learnOverlapCommand
-  , learnIngredientEffectCommand
-  , listEffectsOfCommand
-  , listNonEffectsOfCommand
-  , listPotentialEffectsOfCommand
-  , suggestCombineWithCommand
-  , listEffectsCommand
-  , listIngredientsWithAllOfCommand
-  , listIngredientsCommand
-  , exitCommand ]
+commandDef =
+  MP.choice
+    [ learnOverlapCommand,
+      learnIngredientEffectCommand,
+      listEffectsOfCommand,
+      listNonEffectsOfCommand,
+      listPotentialEffectsOfCommand,
+      suggestCombineWithCommand,
+      listEffectsCommand,
+      listIngredientsWithAllOfCommand,
+      listIngredientsCommand,
+      exitCommand
+    ]
 
 learnOverlapCommand :: Parser Cmd.Command
 learnOverlapCommand = do
@@ -104,7 +110,6 @@ suggestCombineWithCommand = do
 exitCommand :: Parser Cmd.Command
 exitCommand = symbol "exit" >> return Cmd.exit
 
-
 --------------------------------------------------------------------------------
 -- Parser helpers
 --------------------------------------------------------------------------------
@@ -113,23 +118,26 @@ exitCommand = symbol "exit" >> return Cmd.exit
 type Parser = MP.Parsec Void LT.Text
 
 sc :: Parser ()
-sc = L.space
-  MP.space1
-  (L.skipLineComment "//")
-  (L.skipBlockComment "/*" "*/")
+sc =
+  L.space
+    MP.space1
+    (L.skipLineComment "//")
+    (L.skipBlockComment "/*" "*/")
 
 symbol :: T.Text -> Parser T.Text
 symbol = fmap LT.toStrict . L.symbol sc . LT.fromStrict
 
-
 namePart :: Parser T.Text
-namePart = T.pack <$>
-  MP.some (MP.alphaNumChar MP.<|> MP.char '\'' MP.<|> MP.char '-')
+namePart =
+  T.pack
+    <$> MP.some (MP.alphaNumChar MP.<|> MP.char '\'' MP.<|> MP.char '-')
 
 ingredientName :: Parser AD.IngredientName
-ingredientName = AD.ingredientName . T.unwords <$>
-  namePart `MP.sepEndBy1` MP.space1
+ingredientName =
+  AD.ingredientName . T.unwords
+    <$> namePart `MP.sepEndBy1` MP.space1
 
 effectName :: Parser AD.EffectName
-effectName = AD.effectName . T.unwords <$>
-  namePart `MP.sepEndBy1` MP.space1
+effectName =
+  AD.effectName . T.unwords
+    <$> namePart `MP.sepEndBy1` MP.space1

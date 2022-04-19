@@ -1,0 +1,8 @@
+{
+    "[haskell]": {
+        "editor.rulers": [80],
+        "editor.tabSize": 2,
+        "editor.defaultFormatter": "haskell.haskell"
+    },
+    "haskell.formattingProvider": "ormolu"
+}
