@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -31,6 +32,7 @@ module AlchemyComponent.Component
   ( AlchemyComponents,
     Alchemy (..),
     Component (..),
+    learnEffectsFromOverlap,
     IsAlchemyInformation (..),
     AlchemyHas,
     AlchemyHasBefore,
@@ -44,12 +46,16 @@ where
 import AlchemyTypes
   ( EffectName,
     IngredientName,
-    Overlap,
+    Overlap (Overlap),
   )
 import qualified Control.Algebra as Algebra
 import Control.Carrier.Error.Either
   ( ErrorC,
   )
+import Control.Carrier.State.Strict (StateC, execState)
+import qualified Control.Carrier.State.Strict as State
+import Control.Monad (forM_)
+import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.Coerce
   ( coerce,
   )
@@ -66,7 +72,7 @@ import qualified Data.Text as T
 -- types that track specific bits of information.
 --
 -- One can think of this as a record with a field for each type @c@ in @cs@.
-data AlchemyComponents cs = AlchemyComponents {_components :: !(HList cs)}
+newtype AlchemyComponents cs = AlchemyComponents {_components :: HList cs}
 
 -- | Things you can do with 'AlchemyComponents'.
 class Alchemy m alchemy where
@@ -115,13 +121,42 @@ class Monad m => Component alchemy m c where
   -- | Updates the component by processing the result of combining some
   -- ingredients.
   --
-  -- Defaults to returning the original data structure unchanged.
+  -- Defaults to 'learnEffectsFromOverlap'.
   componentLearnOverlap ::
     Overlap ->
     PartiallyUpdated alchemy ->
     c ->
     ErrorC ValidationError m c
-  componentLearnOverlap _ _ c = return c
+  default componentLearnOverlap ::
+    (Algebra.Algebra sig m, Component alchemy m c) =>
+    Overlap ->
+    PartiallyUpdated alchemy ->
+    c ->
+    ErrorC ValidationError m c
+  componentLearnOverlap = learnEffectsFromOverlap
+
+-- | Runs 'componentLearnEffect' for the ingredients and effects in the overlap.
+learnEffectsFromOverlap ::
+  (Algebra.Algebra sig m, Component alchemy m c) =>
+  Overlap ->
+  PartiallyUpdated alchemy ->
+  c ->
+  ErrorC ValidationError m c
+learnEffectsFromOverlap (Overlap ing1 ing2 effects) alchemy component =
+  execState component $
+    forM_ effects $ \eff -> do
+      modifyM $ componentLearnEffect ing1 eff alchemy
+      modifyM $ componentLearnEffect ing2 eff alchemy
+
+modifyM :: Algebra.Algebra sig m => (s -> m s) -> StateC s m ()
+modifyM a = State.get >>= lift . a >>= State.put
+
+--  foldl' (>=>) return $
+--    ( \eff ->
+--        componentLearnEffect ing1 eff alchemy
+--          >=> componentLearnEffect ing2 eff alchemy
+--    )
+--      <$> Set.toList effects
 
 newtype ValidationError = ValidationError T.Text
 

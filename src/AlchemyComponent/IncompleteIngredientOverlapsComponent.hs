@@ -83,7 +83,7 @@ knownOverlapsOfIncompleteIngredientsWith ing =
 knownOverlapsOfIncompleteIngredients ::
   Component.Has IncompleteIngredientOverlapsComponent alchemy =>
   alchemy ->
-  [(UPair IngredientName, (Set EffectName))]
+  [(UPair IngredientName, Set EffectName)]
 knownOverlapsOfIncompleteIngredients =
   PairMap.assocs . getPairMap . Component.get
 

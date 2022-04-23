@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -17,15 +18,12 @@ import qualified AlchemyComponent.Component as Component
 import AlchemyTypes
   ( EffectName,
     IngredientName,
-    Overlap (Overlap),
   )
 import BinaryRelation
   ( BinaryRelation,
   )
 import qualified BinaryRelation as BR
-import Data.Function
-  ( (&),
-  )
+import qualified Control.Algebra as Algebra
 import Data.Set
   ( Set,
   )
@@ -87,29 +85,15 @@ allIngredientsWithEffects ::
 allIngredientsWithEffects = BR.lefts . _ingHasEffectRelation . Component.get
 
 instance
-  ( Monad m
+  ( Algebra.Algebra sig m
   ) =>
   Component.Component alchemy m IngredientEffectsComponent
   where
   initializeComponent _ = return $ IngredientEffectsComponent BR.empty
   componentLearnEffect ing eff _ ingredientEffects =
     return $ insertEffect ing eff ingredientEffects
-  componentLearnOverlap overlap _ ingredientEffects =
-    return $ insertOverlap overlap ingredientEffects
 
 insertEffect ing eff =
   IngredientEffectsComponent
     . BR.insert ing eff
     . _ingHasEffectRelation
-
-insertOverlap
-  (Overlap ing1 ing2 effects)
-  component =
-    IngredientEffectsComponent ingHasEffectRelation
-    where
-      ingHasEffectRelation =
-        Set.foldl' addEffect (_ingHasEffectRelation component) effects
-      addEffect br effect =
-        br
-          & BR.insert ing1 effect
-            . BR.insert ing2 effect

@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: dcf2796626d8d05dbeae5ec7c256907b57a5022e0e53d9f9e9b7cbfa0cdc114b
+-- hash: 48579d35a2878d1a666d0349a7caef461544471314be591e555406ec4beb60d9
 
 name:           skyrim-alchemy
 version:        0.1.0.0
@@ -16,6 +16,7 @@ library
   exposed-modules:
       AlchemyComponent.CompletedIngredientsComponent
       AlchemyComponent.Component
+      AlchemyComponent.EmptyIngredientsComponent
       AlchemyComponent.IncompleteIngredientNotHasEffectComponent
       AlchemyComponent.IncompleteIngredientOverlapsComponent
       AlchemyComponent.IngredientEffectsComponent

@@ -84,8 +84,9 @@ instance
   componentLearnEffect ing _ alchemy component =
     updateIngIfCompleted ing alchemy component
 
-  componentLearnOverlap overlap alchemy component =
-    learn overlap alchemy component
+  componentLearnOverlap (Overlap ing1 ing2 _) alchemy =
+    updateIngIfCompleted ing1 alchemy
+      >=> updateIngIfCompleted ing2 alchemy
 
 updateIngIfCompleted ing alchemy component = do
   when (Set.size (updatedEffectsOf ing alchemy) > 4) $
@@ -100,7 +101,3 @@ updateIngIfCompleted ing alchemy component = do
           else id
       )
         $ _completedIngredients component
-
-learn (Overlap ing1 ing2 _) alchemy =
-  updateIngIfCompleted ing1 alchemy
-    >=> updateIngIfCompleted ing2 alchemy

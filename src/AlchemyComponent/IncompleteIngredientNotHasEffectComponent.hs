@@ -30,22 +30,14 @@ import AlchemyComponent.IncompleteIngredientOverlapsComponent
 import AlchemyTypes
   ( EffectName,
     IngredientName,
-    Overlap (Overlap),
   )
 import BinaryRelation
   ( BinaryRelation,
   )
 import qualified BinaryRelation as BR
 import qualified Control.Algebra as Algebra
-import Control.Carrier.State.Strict
-  ( execState,
-  )
 import Control.Effect.Error
   ( throwError,
-  )
-import qualified Control.Effect.State as State
-import Control.Monad
-  ( forM_,
   )
 import Data.Function
   ( (&),
@@ -116,9 +108,6 @@ instance
       validateNewEffect ing eff component
       learnEffect ing eff alchemy component
 
-  componentLearnOverlap overlap alchemy component =
-    learn overlap alchemy component
-
 validateNewEffect ing eff component
   | ingNotHasEffect = throwError ingNotHasEffectError
   | otherwise = return ()
@@ -157,19 +146,3 @@ learnEffect ing eff alchemy component =
       if isCompletedAfterUpdate ing alchemy
         then BR.deleteLeft ing
         else id
-
-learn (Overlap ing1 ing2 effects) alchemy component =
-  execState component $ do
-    forM_ effects $ \effect -> do
-      modifyM $ learnEffect ing1 effect alchemy
-      modifyM $ learnEffect ing2 effect alchemy
-
--- TODO: Move this to a common place or find way to avoid using it
-modifyM ::
-  Algebra.Has (State.State s) sig m =>
-  (s -> m s) ->
-  m ()
-modifyM action = do
-  state <- State.get
-  updated <- action state
-  State.put updated
