@@ -35,6 +35,12 @@ instance
   initializeComponent _ = return $ EmptyIngredientsComponent Set.empty
   componentLearnEffect = learnEffect
 
+  componentLearnIngredient ing _ =
+    return
+      . EmptyIngredientsComponent
+      . Set.insert ing
+      . _emptyIngredients
+
 learnEffect ing _ alchemy component =
   return $
     if isCompletedAfterUpdate ing alchemy

@@ -79,6 +79,10 @@ class Alchemy m alchemy where
   -- | Creates an empty instance representing zero alchemy knowledge.
   initialize :: m alchemy
 
+  -- | Updates the data structure to include the ingredient.
+  learnIngredient ::
+    IngredientName -> alchemy -> m alchemy
+
   -- | Updates the data structure by associating the effect with the ingredient.
   learnIngredientEffect ::
     IngredientName ->
@@ -105,6 +109,17 @@ class Alchemy m alchemy where
 class Monad m => Component alchemy m c where
   -- | Creates an empty instance of the component representing zero knowledge.
   initializeComponent :: PartiallyInitialized alchemy -> m c
+
+  -- | Learns that an ingredient exists, without learning anything else about
+  -- it.
+  --
+  -- Defaults to returning the original data structure unchanged. 
+  componentLearnIngredient ::
+    IngredientName ->
+    PartiallyUpdated alchemy ->
+    c ->
+    m c
+  componentLearnIngredient _ _ c = return c
 
   -- | Updates the component by processing the fact that an ingredient has
   -- an effect.
@@ -259,6 +274,10 @@ instance
   initialize =
     AlchemyComponents
       <$> initializeRecursively (Proxy @cs) HEmpty
+  
+  learnIngredient ing alchemy =
+    AlchemyComponents
+      <$> learnIngredientRecursively ing alchemy (_components alchemy) HEmpty
 
   learnIngredientEffect ing eff alchemy =
     AlchemyComponents
@@ -272,6 +291,13 @@ class AlchemyInitialize m (all :: [*]) remaining initialized where
   initializeRecursively :: Proxy all -> HList initialized -> m (HList remaining)
 
 class AlchemyLearn m all remaining updated where
+  learnIngredientRecursively ::
+    Algebra.Algebra sig m =>
+    IngredientName ->
+    AlchemyComponents all ->
+    HList remaining ->
+    HList updated ->
+    m (HList remaining)
   learnEffectRecursively ::
     Algebra.Algebra sig m =>
     IngredientName ->
@@ -306,6 +332,7 @@ instance
     return $ HCons c' remaining'
 
 instance Monad m => AlchemyLearn m all '[] cs where
+  learnIngredientRecursively _ _ _ _ = return HEmpty
   learnEffectRecursively _ _ _ _ _ = return HEmpty
   learnOverlapRecursively _ _ _ _ = return HEmpty
 
@@ -316,6 +343,18 @@ instance
   AlchemyLearn m all (c ': remaining) updated
   where
   -- TODO: Merge these implementations
+
+  learnIngredientRecursively ing all (HCons c remaining) updated = do
+    let partiallyUpdated =
+          PartiallyUpdated
+            { _oldData = _components all,
+              _newData = updated
+            }
+    c' <- componentLearnIngredient ing partiallyUpdated c
+    remaining' <-
+      learnIngredientRecursively ing all remaining (HCons c' updated)
+    
+    return $ HCons c' remaining'
 
   learnEffectRecursively ing eff all (HCons c remaining) updated = do
     let partiallyUpdated =

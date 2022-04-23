@@ -45,6 +45,7 @@ import AlchemyComponent.Component
     ValidationError,
   )
 import qualified AlchemyComponent.Component as Component
+import qualified AlchemyComponent.EmptyIngredientsComponent as Component
 import qualified AlchemyComponent.IncompleteIngredientNotHasEffectComponent as Component
 import qualified AlchemyComponent.IncompleteIngredientOverlapsComponent as Component
 import qualified AlchemyComponent.IngredientEffectsComponent as Component
@@ -66,6 +67,7 @@ import Control.Carrier.State.Strict
   ( get,
     put,
   )
+import qualified Control.Carrier.State.Strict as State
 import Control.Effect.Error
   ( Error,
   )
@@ -95,7 +97,6 @@ import Data.UPair
     pair,
     unpair,
   )
-import qualified AlchemyComponent.EmptyIngredientsComponent as Component
 
 type AlchemyData =
   AlchemyComponents
@@ -306,7 +307,10 @@ learnIngredient ::
   (Has (State AlchemyData) sig m) =>
   IngredientName ->
   m ()
-learnIngredient ing = undefined -- TODO: Implement (update empty ings)
+learnIngredient ing =
+  State.get @AlchemyData
+    >>= Component.learnIngredient ing
+    >>= State.put
 
 -- | Associates the effect to the ingredient.
 learnIngredientEffect ::
@@ -317,12 +321,9 @@ learnIngredientEffect ::
   EffectName ->
   m ()
 learnIngredientEffect ing eff =
-  do
-    oldAlchemyData <- get @AlchemyData
-    newAlchemyData <-
-      rethrowing id $
-        Component.learnIngredientEffect ing eff oldAlchemyData
-    put newAlchemyData
+  State.get @AlchemyData
+    >>= rethrowing id . Component.learnIngredientEffect ing eff
+    >>= State.put
 
 learnOverlap ::
   ( Has (State AlchemyData) sig m,
