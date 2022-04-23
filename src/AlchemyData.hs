@@ -63,10 +63,6 @@ import Control.Algebra
 import Control.Carrier.Error.Extra
   ( rethrowing,
   )
-import Control.Carrier.State.Strict
-  ( get,
-    put,
-  )
 import qualified Control.Carrier.State.Strict as State
 import Control.Effect.Error
   ( Error,
@@ -334,9 +330,6 @@ learnOverlap ::
   Set EffectName ->
   m ()
 learnOverlap ing1 ing2 effs =
-  do
-    oldAlchemyData <- get @AlchemyData
-    newAlchemyData <-
-      rethrowing id $
-        Component.learnOverlap (Overlap ing1 ing2 effs) oldAlchemyData
-    put newAlchemyData
+  State.get @AlchemyData
+    >>= rethrowing id . Component.learnOverlap (Overlap ing1 ing2 effs)
+    >>= State.put
