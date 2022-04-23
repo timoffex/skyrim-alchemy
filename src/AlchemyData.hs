@@ -95,11 +95,13 @@ import Data.UPair
     pair,
     unpair,
   )
+import qualified AlchemyComponent.EmptyIngredientsComponent as Component
 
 type AlchemyData =
   AlchemyComponents
     '[ Component.IngredientEffectsComponent,
        Component.CompletedIngredientsComponent,
+       Component.EmptyIngredientsComponent,
        Component.IncompleteIngredientOverlapsComponent,
        Component.IncompleteIngredientNotHasEffectComponent
      ]
@@ -128,10 +130,7 @@ allKnownIngredients :: AlchemyData -> Set IngredientName
 allKnownIngredients alchemyData =
   Set.union
     (Component.allIngredientsWithEffects alchemyData)
-    undefined
-
--- TODO
--- (emptyIngredients alchemyData)
+    (Component.emptyIngredients alchemyData)
 
 -- | Gets all known overlaps between pairs of ingredients.
 allKnownOverlaps ::
