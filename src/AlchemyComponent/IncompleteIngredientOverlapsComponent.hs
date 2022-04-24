@@ -12,42 +12,19 @@ module AlchemyComponent.IncompleteIngredientOverlapsComponent
   )
 where
 
-import AlchemyComponent.Component as Component
-  ( AlchemyHas,
-    ValidationError (ValidationError),
-  )
+import AlchemyComponent.Component as Component (AlchemyHas, ValidationError (ValidationError))
 import qualified AlchemyComponent.Component as Component
-import AlchemyComponent.IngredientEffectsComponent
-  ( IngredientEffectsComponent,
-    effectsOf,
-  )
-import AlchemyTypes
-  ( EffectName,
-    IngredientName,
-    Overlap (Overlap),
-  )
+import AlchemyComponent.IngredientEffectsComponent (IngredientEffectsComponent, effectsOf)
+import AlchemyTypes (EffectName, IngredientName, Overlap (Overlap))
 import qualified Control.Algebra as Algebra
-import Control.Effect.Error
-  ( throwError,
-  )
-import Data.Map.Strict
-  ( Map,
-  )
-import Data.Maybe
-  ( isJust,
-  )
-import Data.Set
-  ( Set,
-  )
+import Control.Effect.Error (throwError)
+import Data.Map.Strict (Map)
+import Data.Maybe (isJust)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import Data.UPair
-  ( UPair,
-    pair,
-  )
-import PairMap
-  ( PairMap,
-  )
+import Data.UPair (UPair, pair)
+import PairMap (PairMap)
 import qualified PairMap
 
 -- | Component that keeps track of the known overlaps between incomplete

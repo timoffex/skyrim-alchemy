@@ -1,49 +1,33 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
-
-import qualified AlchemyData                  as AD
-import           AlchemyInteraction
-import           AlchemyInteractionIO
-    ( runAlchemyInteractionIO )
-import           CLI
-    ( parseCommand, runCommand )
-import qualified Command                      as Cmd
-import           Control.Algebra
-import           Control.Carrier.Error.Either
-    ( runError )
-import           Control.Carrier.Lift
-    ( runM )
-import           Control.Carrier.State.Strict
-    ( evalState, execState, run )
-import           Control.Effect.Lift
-    ( sendIO )
-import           Control.Effect.Lift
-import           Control.Effect.State
-    ( get, modify )
-import           Control.Exception
-    ( SomeException, catch )
-import           Control.Monad
-    ( forever, void )
-import           Data.Foldable
-    ( forM_ )
-import qualified Data.Set                     as S
-import qualified Data.Text                    as T
-import qualified Data.Text.Lazy               as LT
-import           Data.UPair
-    ( unpair )
-import           Data.Void
-    ( Void )
-import           System.Console.Readline
-    ( addHistory, readline )
-import qualified Text.Megaparsec              as MP
-import qualified Text.Megaparsec.Char         as MP
-import qualified Text.Megaparsec.Char.Lexer   as L
-
+import qualified AlchemyData as AD
+import AlchemyInteraction (AlchemyInteraction)
+import AlchemyInteractionIO (runAlchemyInteractionIO)
+import CLI (parseCommand, runCommand)
+import qualified Command as Cmd
+import Control.Algebra (Has)
+import Control.Carrier.Error.Either (runError)
+import Control.Carrier.Lift (runM)
+import Control.Carrier.State.Strict (evalState, execState, run)
+import Control.Effect.Lift (Lift, sendIO)
+import Control.Effect.State (get, modify)
+import Control.Exception (SomeException, catch)
+import Control.Monad (forever, void)
+import Data.Foldable (forM_)
+import qualified Data.Set as S
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as LT
+import Data.UPair (unpair)
+import Data.Void (Void)
+import System.Console.Readline (addHistory, readline)
+import qualified Text.Megaparsec as MP
+import qualified Text.Megaparsec.Char as MP
+import qualified Text.Megaparsec.Char.Lexer as L
 
 main :: IO ()
 main = do
@@ -54,27 +38,28 @@ main = do
   -- large files without loading them completely into memory. I
   -- haven't benchmarked this, and it's 100% a premature optimization,
   -- but it makes me happy.
-  inputFileContents <- LT.pack <$>
-    catch @SomeException (readFile inputFile) (return . const "")
+  inputFileContents <-
+    LT.pack
+      <$> catch @SomeException (readFile inputFile) (return . const "")
   case MP.parse ingredientFile inputFile inputFileContents of
-    Left bundle       -> putStr (MP.errorBundlePretty bundle)
+    Left bundle -> putStr (MP.errorBundlePretty bundle)
     Right initialData -> do
       putStrLn "Parsed successfully!"
 
-      runM .
-          evalState initialData .
-          runAlchemyInteractionIO .
-          forever $ do
-        -- Save before every command.
-        get >>=
-          sendIO .
-          writeFile outputFile .
-          serializeAlchemyData
+      runM
+        . evalState initialData
+        . runAlchemyInteractionIO
+        . forever
+        $ do
+          -- Save before every command.
+          get
+            >>= sendIO
+              . writeFile outputFile
+              . serializeAlchemyData
 
-        tryReadCommand >>= \case
-          Nothing -> sendIO $ putStrLn "Invalid command."
-          Just cmd -> runCommand cmd
-
+          tryReadCommand >>= \case
+            Nothing -> sendIO $ putStrLn "Invalid command."
+            Just cmd -> runCommand cmd
 
 --------------------------------------------------------------------------------
 -- Parser helpers
@@ -84,17 +69,17 @@ main = do
 type Parser = MP.Parsec Void LT.Text
 
 sc :: Parser ()
-sc = L.space
-  MP.space1
-  (L.skipLineComment "//")
-  (L.skipBlockComment "/*" "*/")
+sc =
+  L.space
+    MP.space1
+    (L.skipLineComment "//")
+    (L.skipBlockComment "/*" "*/")
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
 symbol :: T.Text -> Parser T.Text
 symbol = fmap LT.toStrict . L.symbol sc . LT.fromStrict
-
 
 --------------------------------------------------------------------------------
 -- Parsing an ingredient save file
@@ -109,28 +94,28 @@ ingredientFile = do
   overlaps <- MP.many overlapDef
   MP.eof
 
-  let alch = run .
-             runError @AD.ValidationError .
-             -- TODO: This forces the monad used in the program to be Identity
-             execState (run AD.emptyAlchemyData) $ do
-        forM_ ings $ \(IngredientDef ingName effs) -> do
-          AD.learnIngredient ingName
-          mapM_ (AD.learnIngredientEffect ingName) effs
+  let alch = run
+        . runError @AD.ValidationError
+        .
+        -- TODO: This forces the monad used in the program to be Identity
+        execState (run AD.emptyAlchemyData)
+        $ do
+          forM_ ings $ \(IngredientDef ingName effs) -> do
+            AD.learnIngredient ingName
+            mapM_ (AD.learnIngredientEffect ingName) effs
 
-        forM_ overlaps $ \(OverlapDef ing1 ing2 effs) -> do
-          AD.learnOverlap ing1 ing2 effs
+          forM_ overlaps $ \(OverlapDef ing1 ing2 effs) -> do
+            AD.learnOverlap ing1 ing2 effs
 
   case alch of
-    Left err      -> fail $ show err
+    Left err -> fail $ show err
     Right success -> return success
-
 
 data IngredientDef
   = IngredientDef AD.IngredientName (S.Set AD.EffectName)
+
 data OverlapDef
   = OverlapDef AD.IngredientName AD.IngredientName (S.Set AD.EffectName)
-
-
 
 ingredientDef :: Parser IngredientDef
 ingredientDef = lexeme $ do
@@ -141,18 +126,20 @@ ingredientDef = lexeme $ do
 
   return $ IngredientDef ingName (S.fromList effNames)
 
-
 namePart :: Parser T.Text
-namePart = T.pack <$>
-  MP.some (MP.alphaNumChar MP.<|> MP.char '\'' MP.<|> MP.char '-')
+namePart =
+  T.pack
+    <$> MP.some (MP.alphaNumChar MP.<|> MP.char '\'' MP.<|> MP.char '-')
 
 ingredientName :: Parser AD.IngredientName
-ingredientName = AD.ingredientName . T.unwords <$>
-  namePart `MP.sepEndBy1` MP.space1
+ingredientName =
+  AD.ingredientName . T.unwords
+    <$> namePart `MP.sepEndBy1` MP.space1
 
 effectName :: Parser AD.EffectName
-effectName = AD.effectName . T.unwords <$>
-  namePart `MP.sepEndBy1` MP.space1
+effectName =
+  AD.effectName . T.unwords
+    <$> namePart `MP.sepEndBy1` MP.space1
 
 overlapDef :: Parser OverlapDef
 overlapDef = lexeme $ do
@@ -172,9 +159,8 @@ overlapDef = lexeme $ do
 
 serializeAlchemyData :: AD.AlchemyData -> String
 serializeAlchemyData alchemyData = run . execState "" $ do
-  let
-    append s = modify (++ s)
-    newline = append "\n"
+  let append s = modify (++ s)
+      newline = append "\n"
 
   -- Print all known ingredients
   forM_ (AD.allKnownIngredients alchemyData) $ \ing -> do
@@ -199,16 +185,15 @@ serializeAlchemyData alchemyData = run . execState "" $ do
       append ", "
     newline
 
-
 --------------------------------------------------------------------------------
 -- Parsing commands
 --------------------------------------------------------------------------------
 
-tryReadCommand
-  :: ( Has AlchemyInteraction sig m
-     , Has (Lift IO) sig m
-     )
-  => m (Maybe Cmd.Command)
+tryReadCommand ::
+  ( Has AlchemyInteraction sig m,
+    Has (Lift IO) sig m
+  ) =>
+  m (Maybe Cmd.Command)
 tryReadCommand = do
   sendIO (readline ">>> ") >>= \case
     Nothing -> return $ Just Cmd.exit

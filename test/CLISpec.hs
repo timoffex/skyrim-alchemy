@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
@@ -10,69 +9,22 @@ module CLISpec
   )
 where
 
-import AlchemyData
-  ( AlchemyData,
-    EffectName,
-    IngredientName,
-    ValidationError,
-    effectName,
-    emptyAlchemyData,
-    ingredientName,
-    learnIngredientEffect,
-  )
-import AlchemyInteraction
-  ( AlchemyInteraction (PrintEffects),
-    geq,
-  )
-import CLI
-  ( Command (runCommand),
-    parseCommand,
-  )
-import Control.Algebra
-  ( Handler,
-    run,
-  )
-import Control.Carrier.Error.Either
-  ( ErrorC,
-  )
-import Control.Carrier.Error.Extra
-  ( catching,
-  )
-import Control.Carrier.Interpret
-  ( InterpretC,
-    Interpreter,
-    Reifies,
-    runInterpretState,
-  )
-import Control.Carrier.Lift
-  ( LiftC,
-    runM,
-  )
-import Control.Carrier.State.Strict
-  ( StateC,
-    execState,
-  )
-import Control.Monad
-  ( unless,
-  )
-import Data.Coerce
-  ( coerce,
-  )
-import Data.Functor
-  ( void,
-    ($>),
-  )
-import Data.Maybe
-  ( fromJust,
-  )
+import AlchemyData (AlchemyData, EffectName, IngredientName, ValidationError, effectName, emptyAlchemyData, ingredientName, learnIngredientEffect)
+import AlchemyInteraction (AlchemyInteraction (PrintEffects), geq)
+import CLI (Command (runCommand), parseCommand)
+import Control.Algebra (Handler, run)
+import Control.Carrier.Error.Either (ErrorC)
+import Control.Carrier.Error.Extra (catching)
+import Control.Carrier.Interpret (InterpretC, Interpreter, Reifies, runInterpretState)
+import Control.Carrier.Lift (LiftC, runM)
+import Control.Carrier.State.Strict (StateC, execState)
+import Control.Monad (unless)
+import Data.Coerce (coerce)
+import Data.Functor (void, ($>))
+import Data.Maybe (fromJust)
 import qualified Data.Set as S
-import Data.Type.Equality
-  ( (:~:) (Refl),
-  )
-import Test.Hspec
-  ( SpecWith,
-    specify,
-  )
+import Data.Type.Equality ((:~:) (Refl))
+import Test.Hspec (SpecWith, specify)
 
 wheat :: IngredientName
 wheat = ingredientName "Wheat"

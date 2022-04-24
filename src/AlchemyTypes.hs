@@ -1,12 +1,8 @@
 -- | Defines types used everywhere in this repository to represent alchemy data.
 module AlchemyTypes where
 
-import Data.Coerce
-  ( coerce,
-  )
-import Data.Set
-  ( Set,
-  )
+import Data.Coerce (coerce)
+import Data.Set (Set)
 import qualified Data.Text as T
 
 newtype IngredientName

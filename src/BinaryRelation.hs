@@ -16,14 +16,10 @@ module BinaryRelation
   )
 where
 
-import Data.Foldable
-  ( Foldable (foldl'),
-  )
+import Data.Foldable (Foldable (foldl'))
 import qualified Data.Multimap.Set as SM
 import qualified Data.Set as S
-import qualified Data.Tuple as Tuple
-  ( swap,
-  )
+import qualified Data.Tuple as Tuple (swap)
 
 data BinaryRelation left right = BinaryRelation
   { _leftToRight :: !(SM.SetMultimap left right),

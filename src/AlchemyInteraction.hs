@@ -22,19 +22,11 @@ module AlchemyInteraction
   )
 where
 
-import AlchemyData
-  ( EffectName,
-    IngredientName,
-  )
-import Control.Algebra
-  ( Has,
-    send,
-  )
-import Data.Kind
-  ( Type,
-  )
+import AlchemyData (EffectName, IngredientName)
+import Control.Algebra (Has, send)
+import Data.Kind (Type)
 import qualified Data.Set.Internal as S
-import Data.Type.Equality
+import Data.Type.Equality (type (:~:) (..))
 
 -- | An ingredient that was selected for some of its effects.
 data IngredientForEffects

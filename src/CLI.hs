@@ -9,23 +9,14 @@ module CLI
 where
 
 import qualified AlchemyData as AD
-import AlchemyInteraction
-  ( AlchemyInteraction,
-    printError,
-  )
+import AlchemyInteraction (AlchemyInteraction, printError)
 import qualified Command as Cmd
-import Control.Algebra
-  ( Has,
-  )
-import Data.Functor
-  ( void,
-  )
+import Control.Algebra (Has)
+import Data.Functor (void)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as LT
-import Data.Void
-  ( Void,
-  )
+import Data.Void (Void)
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MP
 import qualified Text.Megaparsec.Char.Lexer as L

@@ -12,40 +12,18 @@ module AlchemyComponent.IncompleteIngredientNotHasEffectComponent
   )
 where
 
-import AlchemyComponent.CompletedIngredientsComponent
-  ( CompletedIngredientsComponent,
-    isCompletedAfterUpdate,
-  )
-import AlchemyComponent.Component
-  ( AlchemyHas,
-    AlchemyHasBefore,
-    Component,
-    ValidationError (ValidationError),
-  )
+import AlchemyComponent.CompletedIngredientsComponent (CompletedIngredientsComponent, isCompletedAfterUpdate)
+import AlchemyComponent.Component (AlchemyHas, AlchemyHasBefore, Component, ValidationError (ValidationError))
 import qualified AlchemyComponent.Component as Component
-import AlchemyComponent.IncompleteIngredientOverlapsComponent
-  ( IncompleteIngredientOverlapsComponent,
-    knownOverlapsOfIncompleteIngredientsWith,
-  )
-import AlchemyTypes
-  ( EffectName,
-    IngredientName,
-  )
-import BinaryRelation
-  ( BinaryRelation,
-  )
+import AlchemyComponent.IncompleteIngredientOverlapsComponent (IncompleteIngredientOverlapsComponent, knownOverlapsOfIncompleteIngredientsWith)
+import AlchemyTypes (EffectName, IngredientName)
+import BinaryRelation (BinaryRelation)
 import qualified BinaryRelation as BR
 import qualified Control.Algebra as Algebra
-import Control.Effect.Error
-  ( throwError,
-  )
-import Data.Function
-  ( (&),
-  )
+import Control.Effect.Error (throwError)
+import Data.Function ((&))
 import qualified Data.Map.Strict as Map
-import Data.Set
-  ( Set,
-  )
+import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 

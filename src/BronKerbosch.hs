@@ -5,9 +5,7 @@ module BronKerbosch
   )
 where
 
-import Data.Foldable
-  ( Foldable (fold),
-  )
+import Data.Foldable (Foldable (fold))
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 

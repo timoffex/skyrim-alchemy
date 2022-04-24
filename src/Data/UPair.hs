@@ -6,7 +6,8 @@ module Data.UPair
   , pairs
   ) where
 
-import Data.Foldable
+import Data.Foldable ( Foldable(toList) )
+
 -- | An unordered pair.
 data UPair a
   = UPair { lesser :: a, greater :: a }

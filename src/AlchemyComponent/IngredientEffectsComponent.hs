@@ -1,7 +1,7 @@
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module AlchemyComponent.IngredientEffectsComponent
   ( IngredientEffectsComponent,
@@ -15,18 +15,11 @@ module AlchemyComponent.IngredientEffectsComponent
 where
 
 import qualified AlchemyComponent.Component as Component
-import AlchemyTypes
-  ( EffectName,
-    IngredientName,
-  )
-import BinaryRelation
-  ( BinaryRelation,
-  )
+import AlchemyTypes (EffectName, IngredientName)
+import BinaryRelation (BinaryRelation)
 import qualified BinaryRelation as BR
 import qualified Control.Algebra as Algebra
-import Data.Set
-  ( Set,
-  )
+import Data.Set (Set)
 import qualified Data.Set as Set
 
 -- | Component that keeps track of the known effects for each ingredient.

@@ -12,29 +12,13 @@ module AlchemyInteractionIO
   )
 where
 
-import AlchemyInteraction
-  ( AlchemyInteraction (..),
-    IngredientForEffects (..),
-  )
-import Control.Algebra
-  ( Algebra (..),
-    Has,
-    (:+:) (..),
-  )
-import Control.Effect.Lift
-  ( Lift,
-    sendIO,
-  )
-import Control.Monad.Trans.Class
-  ( MonadTrans (..),
-  )
-import Data.List
-  ( intercalate,
-  )
+import AlchemyInteraction (AlchemyInteraction (..), IngredientForEffects (..))
+import Control.Algebra (Algebra (..), Has, (:+:) (..))
+import Control.Effect.Lift (Lift, sendIO)
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Data.List (intercalate)
 import qualified Data.Set as S
-import System.Exit
-  ( exitSuccess,
-  )
+import System.Exit (exitSuccess)
 
 newtype AlchemyInteractionIO m a = AlchemyInteractionIO {unwrap :: m a}
   deriving (Functor, Applicative, Monad)

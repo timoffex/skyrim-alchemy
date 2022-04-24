@@ -22,35 +22,14 @@ where
 
 import qualified AlchemyData as AD
 import qualified AlchemyInteraction as Interaction
-import Control.Algebra
-  ( Has,
-  )
-import Control.Carrier.Error.Extra
-  ( catching,
-    rethrowing,
-  )
-import Control.Carrier.State.Strict
-  ( State,
-    execState,
-    get,
-    gets,
-    modify,
-  )
-import Control.Effect.Error
-  ( Error,
-  )
+import Control.Algebra (Has)
+import Control.Carrier.Error.Extra (catching, rethrowing)
+import Control.Carrier.State.Strict (State, execState, get, gets, modify)
+import Control.Effect.Error (Error)
 import Control.Effect.State ()
-import Control.Monad
-  ( forM,
-    unless,
-  )
-import Data.Foldable
-  ( maximumBy,
-  )
-import Data.Function
-  ( fix,
-    on,
-  )
+import Control.Monad (forM, unless)
+import Data.Foldable (maximumBy)
+import Data.Function (fix, on)
 import qualified Data.Set as S
 import qualified Data.Text as T
 

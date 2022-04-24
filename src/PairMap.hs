@@ -18,25 +18,12 @@ module PairMap
   )
 where
 
-import Data.Foldable
-  ( Foldable (fold),
-  )
-import Data.Function
-  ( (&),
-  )
+import Data.Foldable (Foldable (fold))
+import Data.Function ((&))
 import qualified Data.Map.Strict as M
-import Data.UPair
-  ( UPair,
-    pair,
-    unpair,
-  )
-import GHC.Conc
-  ( par,
-    pseq,
-  )
-import Prelude hiding
-  ( lookup,
-  )
+import Data.UPair (UPair, pair, unpair)
+import GHC.Conc (par, pseq)
+import Prelude hiding (lookup)
 
 -- | A map from unordered pairs of keys to values.
 data PairMap k a = PairMap

@@ -40,59 +40,26 @@ module AlchemyData
 where
 
 import qualified AlchemyComponent.CompletedIngredientsComponent as Component
-import AlchemyComponent.Component
-  ( AlchemyComponents,
-    ValidationError,
-  )
+import AlchemyComponent.Component (AlchemyComponents, ValidationError)
 import qualified AlchemyComponent.Component as Component
 import qualified AlchemyComponent.EmptyIngredientsComponent as Component
 import qualified AlchemyComponent.IncompleteIngredientNotHasEffectComponent as Component
 import qualified AlchemyComponent.IncompleteIngredientOverlapsComponent as Component
 import qualified AlchemyComponent.IngredientEffectsComponent as Component
-import AlchemyTypes
-  ( EffectName,
-    IngredientName,
-    Overlap (Overlap),
-    effectName,
-    ingredientName,
-  )
-import Control.Algebra
-  ( Algebra,
-    Has,
-  )
-import Control.Carrier.Error.Extra
-  ( rethrowing,
-  )
+import AlchemyTypes (EffectName, IngredientName, Overlap (Overlap), effectName, ingredientName)
+import Control.Algebra (Algebra, Has)
+import Control.Carrier.Error.Extra (rethrowing)
 import qualified Control.Carrier.State.Strict as State
-import Control.Effect.Error
-  ( Error,
-  )
-import Control.Effect.State
-  ( State,
-  )
-import Data.Foldable
-  ( Foldable (fold),
-  )
-import Data.Function
-  ( (&),
-  )
-import Data.List
-  ( foldl1',
-  )
+import Control.Effect.Error (Error)
+import Control.Effect.State (State)
+import Data.Foldable (Foldable (fold))
+import Data.Function ((&))
+import Data.List (foldl1')
 import qualified Data.Map.Strict as Map
-import Data.Maybe
-  ( isJust,
-  )
-import Data.Set
-  ( Set,
-  )
+import Data.Maybe (isJust)
+import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.UPair
-  ( UPair,
-    distinctPairs,
-    pair,
-    unpair,
-  )
+import Data.UPair (UPair, distinctPairs, pair, unpair)
 
 type AlchemyData =
   AlchemyComponents
