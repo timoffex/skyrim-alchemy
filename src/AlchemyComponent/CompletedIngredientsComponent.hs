@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module AlchemyComponent.CompletedIngredientsComponent
@@ -12,31 +13,17 @@ module AlchemyComponent.CompletedIngredientsComponent
   )
 where
 
-import AlchemyComponent.Component
-  ( AlchemyHasBefore,
-    Component,
-    ValidationError (ValidationError),
-  )
+import AlchemyComponent.Component (AlchemyHasBefore, Component, ValidationError (ValidationError))
 import qualified AlchemyComponent.Component as Component
-import AlchemyComponent.IngredientEffectsComponent
-  ( IngredientEffectsComponent,
-    updatedEffectsOf,
-  )
-import AlchemyTypes
-  ( IngredientName,
-    Overlap (Overlap),
-  )
+import AlchemyComponent.IngredientEffectsComponent (IngredientEffectsComponent, updatedEffectsOf)
+import AlchemyTypes (IngredientName, Overlap (Overlap))
 import qualified Control.Algebra as Algebra
-import Control.Effect.Error
-  ( throwError,
-  )
-import Control.Monad
-  ( when,
-    (>=>),
-  )
-import Data.Set
-  ( Set,
-  )
+import Control.Carrier.State.Strict (execState)
+import Control.Effect.Error (throwError)
+import Control.Effect.Lens ((%=))
+import Control.Lens (makeLenses)
+import Control.Monad (when, (>=>))
+import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 
@@ -46,6 +33,8 @@ import qualified Data.Text as T
 -- component list.
 newtype CompletedIngredientsComponent = CompletedIngredientsComponent
   {_completedIngredients :: Set IngredientName}
+
+$(makeLenses ''CompletedIngredientsComponent)
 
 -- | Whether the ingredient has all 4 effects known.
 isCompleted ::
@@ -71,6 +60,10 @@ allCompletedIngredients ::
   Set IngredientName
 allCompletedIngredients = _completedIngredients . Component.get
 
+--------------------------------------------------------------------------------
+-- Implementation
+--------------------------------------------------------------------------------
+
 instance
   ( Algebra.Algebra sig m,
     AlchemyHasBefore IngredientEffectsComponent alchemy
@@ -79,8 +72,6 @@ instance
   where
   initializeComponent _ = return $ CompletedIngredientsComponent Set.empty
 
-  -- TODO: Validate that ingredients are not already completed
-
   componentLearnEffect ing _ alchemy component =
     updateIngIfCompleted ing alchemy component
 
@@ -88,16 +79,13 @@ instance
     updateIngIfCompleted ing1 alchemy
       >=> updateIngIfCompleted ing2 alchemy
 
-updateIngIfCompleted ing alchemy component = do
-  when (Set.size (updatedEffectsOf ing alchemy) > 4) $
+updateIngIfCompleted ing alchemy component = execState component $ do
+  let numEffects = Set.size $ updatedEffectsOf ing alchemy
+
+  when (numEffects > 4) $
     throwError $
       ValidationError $
         "Too many effects on ingredient " <> T.pack (show ing)
 
-  return $
-    CompletedIngredientsComponent $
-      ( if Set.size (updatedEffectsOf ing alchemy) == 4
-          then Set.insert ing
-          else id
-      )
-        $ _completedIngredients component
+  when (numEffects == 4) $
+    completedIngredients %= Set.insert ing
