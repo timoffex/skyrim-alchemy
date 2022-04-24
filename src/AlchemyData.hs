@@ -183,10 +183,9 @@ ingredientsWithEffectIn = flip ingredientsWith
 ingredientsWithAnyOf :: Set EffectName -> AlchemyData -> Set IngredientName
 ingredientsWithAnyOf effs alchemyData =
   Set.unions
-    ( fmap
-        (\eff -> ingredientsWith eff alchemyData)
-        (Set.toList effs)
-    )
+    [ ingredientsWith eff alchemyData
+      | eff <- Set.toList effs
+    ]
 
 -- | Gets all ingredients known to not overlap with the given ingredient.
 ingredientsNotOverlappingWith ::
