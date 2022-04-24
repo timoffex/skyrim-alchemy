@@ -10,15 +10,14 @@ module AlchemyComponent.EmptyIngredientsComponent
   )
 where
 
-import AlchemyComponent.CompletedIngredientsComponent (CompletedIngredientsComponent, isCompletedAfterUpdate)
 import AlchemyComponent.Component (Component)
 import qualified AlchemyComponent.Component as Component
+import AlchemyComponent.IngredientEffectsComponent (IngredientEffectsComponent, updatedEffectsOf)
 import AlchemyTypes (IngredientName)
 import qualified Control.Algebra as Algebra
 import Control.Carrier.State.Strict (execState)
 import Control.Effect.Lens ((%=))
 import Control.Lens (makeLenses, view)
-import Control.Monad (when)
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -37,19 +36,13 @@ emptyIngredients = view emptyIngredientsSet . Component.get
 
 instance
   ( Algebra.Algebra sig m,
-    Component.AlchemyHasBefore CompletedIngredientsComponent alchemy
+    Component.AlchemyHasBefore IngredientEffectsComponent alchemy
   ) =>
   Component alchemy m EmptyIngredientsComponent
   where
   initializeComponent _ = return $ EmptyIngredientsComponent Set.empty
-  componentLearnEffect = learnEffect
 
-  componentLearnIngredient ing _ =
-    return
-      . EmptyIngredientsComponent
-      . Set.insert ing
-      . view emptyIngredientsSet
-
-learnEffect ing _ alchemy component = execState component $ do
-  when (isCompletedAfterUpdate ing alchemy) $
-    emptyIngredientsSet %= Set.delete ing
+  componentLearnIngredient ing alchemy component = execState component $ do
+    if Set.null (updatedEffectsOf ing alchemy)
+      then emptyIngredientsSet %= Set.insert ing
+      else emptyIngredientsSet %= Set.delete ing

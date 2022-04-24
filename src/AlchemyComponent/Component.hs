@@ -43,29 +43,17 @@ module AlchemyComponent.Component
   )
 where
 
-import AlchemyTypes
-  ( EffectName,
-    IngredientName,
-    Overlap (Overlap),
-  )
+import AlchemyTypes (EffectName, IngredientName, Overlap (Overlap))
 import qualified Control.Algebra as Algebra
-import Control.Carrier.Error.Either
-  ( ErrorC,
-  )
+import Control.Carrier.Error.Either (ErrorC)
 import Control.Carrier.State.Strict (StateC, execState)
 import qualified Control.Carrier.State.Strict as State
 import Control.Monad (forM_)
 import Control.Monad.Trans.Class (MonadTrans (lift))
-import Data.Coerce
-  ( coerce,
-  )
-import Data.HList
-  ( HList (HCons, HEmpty),
-  )
+import Data.Coerce (coerce)
+import Data.HList (HList (HCons, HEmpty))
 import qualified Data.HList as HList
-import Data.Proxy
-  ( Proxy (Proxy),
-  )
+import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text as T
 
 -- | Information about Skyrim's alchemy, built from individual 'Component'
@@ -113,7 +101,7 @@ class Monad m => Component alchemy m c where
   -- | Learns that an ingredient exists, without learning anything else about
   -- it.
   --
-  -- Defaults to returning the original data structure unchanged. 
+  -- Defaults to returning the original data structure unchanged.
   componentLearnIngredient ::
     IngredientName ->
     PartiallyUpdated alchemy ->
@@ -124,19 +112,21 @@ class Monad m => Component alchemy m c where
   -- | Updates the component by processing the fact that an ingredient has
   -- an effect.
   --
-  -- Defaults to returning the original data structure unchanged.
+  -- Defaults to 'componentLearnIngredient'.
   componentLearnEffect ::
     IngredientName ->
     EffectName ->
     PartiallyUpdated alchemy ->
     c ->
     ErrorC ValidationError m c
-  componentLearnEffect _ _ _ c = return c
+  componentLearnEffect ing _ alchemy =
+    lift . componentLearnIngredient ing alchemy
 
   -- | Updates the component by processing the result of combining some
   -- ingredients.
   --
-  -- Defaults to 'learnEffectsFromOverlap'.
+  -- Defaults to running 'componentLearnIngredient' on all ingredients followed
+  -- by 'learnEffectsFromOverlap'.
   componentLearnOverlap ::
     Overlap ->
     PartiallyUpdated alchemy ->
@@ -148,7 +138,11 @@ class Monad m => Component alchemy m c where
     PartiallyUpdated alchemy ->
     c ->
     ErrorC ValidationError m c
-  componentLearnOverlap = learnEffectsFromOverlap
+  componentLearnOverlap overlap@(Overlap ing1 ing2 _) alchemy component =
+    execState component $ do
+      modifyM $ lift . componentLearnIngredient ing1 alchemy
+      modifyM $ lift . componentLearnIngredient ing2 alchemy
+      modifyM $ learnEffectsFromOverlap overlap alchemy
 
 -- | Runs 'componentLearnEffect' for the ingredients and effects in the overlap.
 learnEffectsFromOverlap ::
@@ -165,13 +159,6 @@ learnEffectsFromOverlap (Overlap ing1 ing2 effects) alchemy component =
 
 modifyM :: Algebra.Algebra sig m => (s -> m s) -> StateC s m ()
 modifyM a = State.get >>= lift . a >>= State.put
-
---  foldl' (>=>) return $
---    ( \eff ->
---        componentLearnEffect ing1 eff alchemy
---          >=> componentLearnEffect ing2 eff alchemy
---    )
---      <$> Set.toList effects
 
 newtype ValidationError = ValidationError T.Text
 
@@ -274,7 +261,7 @@ instance
   initialize =
     AlchemyComponents
       <$> initializeRecursively (Proxy @cs) HEmpty
-  
+
   learnIngredient ing alchemy =
     AlchemyComponents
       <$> learnIngredientRecursively ing alchemy (_components alchemy) HEmpty
@@ -353,7 +340,7 @@ instance
     c' <- componentLearnIngredient ing partiallyUpdated c
     remaining' <-
       learnIngredientRecursively ing all remaining (HCons c' updated)
-    
+
     return $ HCons c' remaining'
 
   learnEffectRecursively ing eff all (HCons c remaining) updated = do

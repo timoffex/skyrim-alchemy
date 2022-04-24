@@ -9,65 +9,18 @@ module AlchemyDataSpec
   )
 where
 
-import AlchemyData
-  ( AlchemyData,
-    EffectName,
-    IngredientName,
-    ValidationError,
-    allCompletedIngredients,
-    allKnownIngredients,
-    allKnownOverlaps,
-    effectName,
-    effectsOf,
-    emptyAlchemyData,
-    ingredientName,
-    isCompleted,
-    learnIngredient,
-    learnIngredientEffect,
-    learnOverlap,
-    nonEffectsOf,
-    overlapBetween,
-  )
-import Control.Algebra
-  ( run,
-  )
-import Control.Carrier.Error.Either
-  ( ErrorC,
-    runError,
-  )
-import Control.Carrier.Error.Extra
-  ( catching,
-  )
-import Control.Carrier.Lift
-  ( LiftC,
-    runM,
-    sendIO,
-  )
-import Control.Carrier.State.Strict
-  ( StateC,
-    execState,
-    gets,
-  )
-import Control.Effect.Lift
-  ( Has,
-    Lift,
-  )
-import Data.Functor
-  ( void,
-  )
+import AlchemyData (AlchemyData, EffectName, IngredientName, ValidationError, allCompletedIngredients, allKnownIngredients, allKnownOverlaps, effectName, effectsOf, emptyAlchemyData, ingredientName, isCompleted, learnIngredient, learnIngredientEffect, learnOverlap, nonEffectsOf, overlapBetween)
+import Control.Algebra (run)
+import Control.Carrier.Error.Either (ErrorC, runError)
+import Control.Carrier.Error.Extra (catching)
+import Control.Carrier.Lift (LiftC, runM, sendIO)
+import Control.Carrier.State.Strict (StateC, execState, gets)
+import Control.Effect.Lift (Has, Lift)
+import Data.Functor (void)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.UPair
-  ( pair,
-  )
-import Test.Hspec
-  ( HasCallStack,
-    SpecWith,
-    describe,
-    it,
-    shouldBe,
-    shouldSatisfy,
-  )
+import Data.UPair (pair)
+import Test.Hspec (HasCallStack, SpecWith, describe, it, shouldBe, shouldSatisfy)
 
 butterflyWing :: IngredientName
 butterflyWing = ingredientName "butterfly wing"
@@ -226,6 +179,15 @@ spec = do
         learnOverlap blueMountainFlower nirnroot S.empty
         gets (overlapBetween blueMountainFlower nirnroot)
           `shouldReturn` Just S.empty
+
+    it "learns empty ingredients from empty overlap" $
+      runAlchemyData $ do
+        learnOverlap blueMountainFlower nirnroot S.empty
+        gets allKnownIngredients
+          `shouldReturn` S.fromList
+            [ blueMountainFlower,
+              nirnroot
+            ]
 
 --------------------------------------------------------------------------------
 -- Utilities
